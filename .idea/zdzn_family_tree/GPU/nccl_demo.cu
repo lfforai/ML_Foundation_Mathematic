@@ -1,5 +1,6 @@
 //demo作用：多gpu可以通过nccl构建gpu集群并行运算，nccl是nvidia开发的多gpu的信息交互工具类似MPI
 //demo内容利用nccl中的例子中的=单thread对多device的模式，对reduce，allreduce,allgather,ReduceScatter进行了测试
+//参考文档:https://docs.nvidia.com/deeplearning/sdk/nccl-developer-guide/index.html
 //作者：罗锋
 //demo归类：数据族谱gpu实现的子项目测试
 
