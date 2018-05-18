@@ -8,10 +8,6 @@
 #ifndef CUDALIB_H_
 #define CUDALIB_H_
 
-namespace gpu {
-int dimGrid=32;
-int dimBlock=256;
-__global__ void split_global(Matrix A, Matrix B, Matrix C);
-} /* namespace gpu */
+__global__ void split_global(char* dum, char* info,long length);
 
 #endif /* CUDALIB_H_ */

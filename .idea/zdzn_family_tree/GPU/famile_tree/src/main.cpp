@@ -33,14 +33,17 @@
 /* Includes, cuda helper functions */
 #include <helper_cuda.h>
 #include "file_input.h"
+#include <src/split.h>
+
+using namespace std;
+
 
 /* Main */
 int main(int argc, char **argv)
 {file_input::info* re =file_input::input();
-
-
- printf("%s",re->data);
+ //printf("%s",re->data);
  printf("input total rows is:=%ld \n",re->total_row);
+ split::max_ancestors_num(re,2);
  delete re->data;
  delete re;
  printf("start!");

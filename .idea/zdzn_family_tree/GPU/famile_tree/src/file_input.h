@@ -5,7 +5,7 @@
  *      Author: root
  */
 
-#pragma once
+
 #ifndef FILEINPUT_H_
 #define FILEINPUT_H_
 
@@ -19,7 +19,10 @@ public:
 	struct info{
 			char* data;
 			long  total_row;
+			long  total_size;
+			int*  split_mark;//记录每个<\n>的位置
 		}info_N;
+
 	file_input();
 	static info* input();
 	virtual ~file_input();

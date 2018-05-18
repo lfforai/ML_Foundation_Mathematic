@@ -14,16 +14,16 @@
 
 using namespace std;
 
-namespace gpu {
-__global__ void split_global(Matrix A, Matrix B, Matrix C)
-{
-		float Cvalue = 0;
-		int row = blockIdx.y * blockDim.y + threadIdx.y;
-		int col = blockIdx.x * blockDim.x + threadIdx.x;
-		for (int e = 0; e < A.width; ++e)
-			Cvalue += A.elements[row * A.width + e]
-					* B.elements[e * B.width + col];
-		C.elements[row * C.width + col] = Cvalue;
+__global__ void split_global(char* dum, char* info,long length)
+{       extern __shared__ char s[];
+		long length_N = length;
+		int step = gridDim.x*blockDim.x;
+		long start_N =threadIdx.x+blockIdx.x*blockDim.x;
+		if (start_N==0){
+			printf("d:=%d \n",gridDim.x);
+		}
+		for(long start=start_N;start<length_N;start=+step)
+		   {
+		   }
 }
 
-} /* namespace gpu */
