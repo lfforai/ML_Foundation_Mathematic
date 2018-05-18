@@ -41,7 +41,7 @@ int* split::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
     char* keys_data=info_of_key->data;
     long row_num=info_of_key->total_row;
     long buffer_size=info_of_key->total_size;//字节数
-    printf("sizeof:=%ld",buffer_size);
+
     int  deviceCount=GPU_num;
 
     if (GPU_num==-1)
@@ -69,13 +69,15 @@ int* split::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
     }
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
      ncclComm_t* comms=(ncclComm_t*)malloc(deviceCount*sizeof(ncclComm_t));
+//     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*nDev);
      //managing deviceCount devices
+     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
      int* devs=(int *)malloc(deviceCount*sizeof(int));
      for(int i=0;i<deviceCount;i++){
     	  devs[i]=i;
+    	  CUDACHECK(cudaStreamCreate(s+i));
+    	  printf("%d \n",devs[i]);
      }
-     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
-
      //initializing NCCL
      NCCLCHECK(ncclCommInitAll(comms,deviceCount, devs));
      //calling NCCL communication API. Group API is required when using
@@ -83,8 +85,7 @@ int* split::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
 
      NCCLCHECK(ncclGroupStart());
      for (int i = 0; i < deviceCount;i++)
-     	  NCCLCHECK(ncclBcast((void*)d_info[i],(size_t)buffer_size,ncclChar,0,comms[i], s[i]));
-
+     	 NCCLCHECK(ncclBcast((void*)d_info[i],(size_t)(buffer_size),ncclChar,0,comms[i], s[i]));
      NCCLCHECK(ncclGroupEnd());
 
      //synchronizing on CUDA streams to wait for completion of NCCL operation
@@ -96,7 +97,7 @@ int* split::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
      for(int i = 0; i <deviceCount;i++)
           ncclCommDestroy(comms[i]);
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
-     printf("kaishi1 \n");
+
      for(int i=0;i<deviceCount;i++){
        if (i!=deviceCount-1)
           {CUDACHECK(cudaSetDevice(i));
@@ -105,8 +106,10 @@ int* split::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
           {CUDACHECK(cudaSetDevice(i));
     	   split_global<<<dimGrid_N, dimBlock_N,dimBlock_N>>>(d_num[i],d_info[i]+(deviceCount-1)*sub_length,sub_length+yu);}
     }
-	   CUDACHECK(cudaDeviceSynchronize());
-
+       for(int i=0;i<deviceCount;i++){
+         CUDACHECK(cudaSetDevice(i));
+	     CUDACHECK(cudaDeviceSynchronize());
+       }
    	return max;
 };
 
