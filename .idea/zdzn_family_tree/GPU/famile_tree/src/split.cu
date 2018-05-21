@@ -1,12 +1,7 @@
 
 /**
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
- *
- * Please refer to the NVIDIA end user license agreement (EULA) associated
- * with this source code for terms and conditions that govern your use of
- * this software. Any use, reproduction, disclosure, or distribution of
- * this software and related documentation outside the terms of the EULA
- * is strictly prohibited.
+ * 作用：求所有key的最大祖先个数和最大key长度
+ * 作者：罗峰
  */
 #include "nccl.h"
 #include "device_launch_parameters.h"
@@ -74,11 +69,10 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
 		&dimBlock_N,
 		(void*)split_global<T>,
 		2*dimBlock_N*sizeof(T),
-		500);
-
-    printf("dimGrid_N=:%d,dimBlock_N:=%d \n",dimGrid_N,dimBlock_N);
-    dimGrid_N=10;
-    dimBlock_N=32;
+		2048);
+//    printf("dimGrid_N=:%d,dimBlock_N:=%d \n",dimGrid_N,dimBlock_N);
+//    dimGrid_N=10;
+//    dimBlock_N=32;
 //    dimGrid_N=32;
 //    dimBlock_N=32;
 //    printf("%d,%d \n",dimGrid_N,dimBlock_N);
@@ -120,38 +114,44 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
      }
      //finalizing NCCL
       for(int i = 0; i <deviceCount; ++i)
-          ncclCommDestroy(comms[i]);
+          {ncclCommDestroy(comms[i]);
+           CUDACHECK(cudaStreamDestroy(s[i]));}
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
 
+      s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+      for(int i=0;i<deviceCount;i++){
+     	  CUDACHECK(cudaSetDevice(i));
+     	  CUDACHECK(cudaStreamCreate(s+i));
+      }
+
       for(int i=0;i<deviceCount;i++)
-      {
+      {   CUDACHECK(cudaSetDevice(i));
           if (i!=deviceCount-1)
-          {CUDACHECK(cudaSetDevice(i));
-    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T)>>>(d_num[i],d_info[i],i*sub_length,sub_length);
+          {
+    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T),s[i]>>>(d_num[i],d_info[i],i*sub_length,sub_length,dimBlock_N);
+    	   //2*dimBlock_N*sizeof(T)
           }
           else
-          {CUDACHECK(cudaSetDevice(i));
-    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T)>>>(d_num[i],d_info[i],(deviceCount-1)*sub_length,sub_length+yu);
+          {
+    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T),s[i]>>>(d_num[i],d_info[i],(deviceCount-1)*sub_length,sub_length+yu,dimBlock_N);
           }
       }
 
       for (int i = 0;i < deviceCount;i++)
+        {
+            CUDACHECK(cudaSetDevice(i));
+            CUDACHECK(cudaMemcpyAsync(h_num[i],d_num[i],2*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost,s[i]));
+        }
+
+
+      for (int i = 0;i < deviceCount;i++)
       {
           CUDACHECK(cudaSetDevice(i));
-          CUDACHECK(cudaDeviceSynchronize());
+          CUDACHECK(cudaStreamSynchronize(s[i]));
       }
 
-      for (int i = 0; i < deviceCount;i++)
-      {
-          CUDACHECK(cudaSetDevice(i));
-          CUDACHECK(cudaMemcpy(h_num[i],d_num[i],2*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost));
-      }
-
-      for (int i = 0; i < deviceCount;i++)
-      {
-          CUDACHECK(cudaSetDevice(i));
-          CUDACHECK(cudaDeviceSynchronize());
-      }
+      for(int i = 0; i <deviceCount; ++i)
+           {CUDACHECK(cudaStreamDestroy(s[i]));}
 
       for (int i = 0; i < deviceCount;i++)
       {  for (int j = 0; j < dimGrid_N*dimBlock_N;j++)
@@ -165,8 +165,8 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
         		 max[1]=h_num[i][j*2+1];
 //        		 printf("max[1]：=%d \n",max[1]);
         	 }
-        	     if(j<=2 and (h_num[i][j*2]!=0 or h_num[i][j*2+1]!=0))
-        	     printf("max[0]=%d,max[1]=%d,i:=%d,j:=%d \n",(int)h_num[i][j*2],(int)h_num[i][j*2+1],i,j);
+//        	     if(j<2 and (h_num[i][j*2]!=0 or h_num[i][j*2+1]!=0))
+//        	     printf("max[0]=%d,max[1]=%d,i:=%d,j:=%d \n",(int)h_num[i][j*2],(int)h_num[i][j*2+1],i,j);
           }
       }
 
@@ -175,5 +175,6 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
 };
 
 template class split<byte>;
+template class split<ubyte>;
 template class split<int>;
 

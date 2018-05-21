@@ -18,7 +18,7 @@ typedef unsigned char ubyte;
 template <class T>
 __host__ __device__ void len(const char*info,T* result);
 template <class T>
-__global__ void split_global(T* dum, char* info,long start,long length);
+__global__ void split_global(T* dum, char* info,long start,long length,int dimblock);
 
 
 #endif /* CUDALIB_H_ */
