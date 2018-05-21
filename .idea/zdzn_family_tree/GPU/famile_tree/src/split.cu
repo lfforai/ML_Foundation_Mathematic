@@ -1,115 +1,179 @@
-/*
- * split.h
+
+/**
+ * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
  *
- *  Created on: 2018年5月17日
- *       Author: 罗锋
- *  基于多GPU集群的族谱分解：
- *  例如：MDNY.SZWQ.11MD#1.MlyGnCptLo拆分为
- *       grand-grand-father：MDNY
- *       grand-father：MDNY.SZWQ
- *       father：MDNY.SZWQ.11MD#1
+ * Please refer to the NVIDIA end user license agreement (EULA) associated
+ * with this source code for terms and conditions that govern your use of
+ * this software. Any use, reproduction, disclosure, or distribution of
+ * this software and related documentation outside the terms of the EULA
+ * is strictly prohibited.
  */
-#include "cuda_runtime.h"
-//include的输入是有顺序
 #include "nccl.h"
-#include <src/split.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "device_launch_parameters.h"
+#include "cuda_runtime.h"
 #include <src/cudalib.h>
+#include <src/split.h>
+#define CUDACHECK(cmd) do {                         \
+  cudaError_t e = cmd;                              \
+  if( e != cudaSuccess ) {                          \
+    printf("Failed: Cuda error %s:%d '%s'\n",             \
+        __FILE__,__LINE__,cudaGetErrorString(e));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
 
-//#include <src/cudalib.h>
-using namespace std;
 
-split::split() {
+#define NCCLCHECK(cmd) do {                         \
+  ncclResult_t r = cmd;                             \
+  if (r!= ncclSuccess) {                            \
+    printf("Failed, NCCL error %s:%d '%s'\n",             \
+        __FILE__,__LINE__,ncclGetErrorString(r));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
+template<typename T>
+split<T>::split() {
 	// TODO Auto-generated constructor stub
-
 }
 
-split::~split() {
+template<typename T>
+split<T>::~split() {
 	// TODO Auto-generated destructor stub
 }
 
 //返回所有key值中分解出的最多的一个祖先个数
 //例如：MDNY.SZWQ.11MD#1.MlyGnCptLo,祖先个数为3
 //返回keys列表中单个key最大祖先个数和最大字符串长度
-int* split::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
+template<typename T>
+T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
 	int dimGrid_N=224;
 	int dimBlock_N=256;
 
-	int* max=(int*)malloc(2*sizeof(int));//max[0]:祖先最大数，max[1]:key的最大长度
+    T* max=(T*)malloc(2*sizeof(T));//max[0]:祖先最大数，max[1]:key的最大长度
+    max[0]=(T)0;
+    max[1]=(T)0;
     char* keys_data=info_of_key->data;
-    long row_num=info_of_key->total_row;
+//  long row_num=info_of_key->total_row;
     long buffer_size=info_of_key->total_size;//字节数
-
-    int  deviceCount=GPU_num;
+    int deviceCount=GPU_num;
 
     if (GPU_num==-1)
 	   {CUDACHECK(cudaGetDeviceCount(&deviceCount));}
 
-//    #记录每个key的最大祖先个数和最大长度的数组
-    char** h_num=(char **)malloc(deviceCount*sizeof(char*));
-    //每个gpu一个数组记录最大值
-    char** d_num=(char **)malloc(deviceCount*sizeof(char*));
+    //#记录每个key的最大祖先个数和最大长度的数组
+    T** h_num=(T **)malloc(deviceCount*sizeof(T*));
+    T** d_num=(T **)malloc(deviceCount*sizeof(T*));
     char** d_info=(char **)malloc(deviceCount*sizeof(char*));
 
-    long yu= row_num%deviceCount;
-    long sub_length= row_num/deviceCount;
+    long yu= buffer_size%deviceCount;
+    long sub_length=buffer_size/deviceCount;
+
+    cudaOccupancyMaxPotentialBlockSize(
+		&dimGrid_N,
+		&dimBlock_N,
+		(void*)split_global<T>,
+		2*dimBlock_N*sizeof(T),
+		500);
+
+    printf("dimGrid_N=:%d,dimBlock_N:=%d \n",dimGrid_N,dimBlock_N);
+    dimGrid_N=10;
+    dimBlock_N=32;
+//    dimGrid_N=32;
+//    dimBlock_N=32;
+//    printf("%d,%d \n",dimGrid_N,dimBlock_N);
 
     //此处假设所有的祖先不超过255个，所以采用char
     for(int i=0;i<deviceCount;i++){
     	CUDACHECK(cudaSetDevice(i));
-    	//每个gpu一个数组记录：每个线程获取的部分key值中最大的祖先数
-        CUDACHECK(cudaMalloc(d_num + i,dimGrid_N*dimBlock_N*sizeof(char)));
-        h_num[i]=(char *)malloc(dimGrid_N*dimBlock_N*sizeof(char*));
-        CUDACHECK(cudaMalloc(d_info + i,buffer_size* sizeof(char)));
+    	h_num[i]=(T *)malloc(2*dimGrid_N*dimBlock_N*sizeof(T));
+        CUDACHECK(cudaMalloc(d_num+i,2*dimGrid_N*dimBlock_N*sizeof(T)));
+        CUDACHECK(cudaMalloc(d_info+i,buffer_size* sizeof(char)));
         if (i==0){//gpu较多情况下使用nccl，在gpu较少情况下可以不使用nccl，这里统一使用nccl无论gpu个数
            CUDACHECK(cudaMemcpy(d_info[i],keys_data,buffer_size*sizeof(char), cudaMemcpyHostToDevice));
         }
     }
+
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
-     ncclComm_t* comms=(ncclComm_t*)malloc(deviceCount*sizeof(ncclComm_t));
-//     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*nDev);
-     //managing deviceCount devices
      cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+     ncclComm_t* comms=(ncclComm_t*)malloc(deviceCount*sizeof(ncclComm_t));
+     //managing deviceCount devices
      int* devs=(int *)malloc(deviceCount*sizeof(int));
      for(int i=0;i<deviceCount;i++){
+    	  CUDACHECK(cudaSetDevice(i));
     	  devs[i]=i;
     	  CUDACHECK(cudaStreamCreate(s+i));
-    	  printf("%d \n",devs[i]);
      }
+
      //initializing NCCL
      NCCLCHECK(ncclCommInitAll(comms,deviceCount, devs));
      //calling NCCL communication API. Group API is required when using
      //multiple devices per thread
-
      NCCLCHECK(ncclGroupStart());
-     for (int i = 0; i < deviceCount;i++)
-     	 NCCLCHECK(ncclBcast((void*)d_info[i],(size_t)(buffer_size),ncclChar,0,comms[i], s[i]));
+     for (int i = 0; i < deviceCount; ++i)
+   	     NCCLCHECK(ncclBcast((void*)d_info[i],buffer_size,ncclChar,0,comms[i], s[i]));
      NCCLCHECK(ncclGroupEnd());
-
      //synchronizing on CUDA streams to wait for completion of NCCL operation
-     for (int i = 0; i < deviceCount;i++) {
+     for (int i = 0; i < deviceCount; ++i) {
        CUDACHECK(cudaSetDevice(i));
        CUDACHECK(cudaStreamSynchronize(s[i]));
      }
      //finalizing NCCL
-     for(int i = 0; i <deviceCount;i++)
+      for(int i = 0; i <deviceCount; ++i)
           ncclCommDestroy(comms[i]);
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
 
-     for(int i=0;i<deviceCount;i++){
-       if (i!=deviceCount-1)
+      for(int i=0;i<deviceCount;i++)
+      {
+          if (i!=deviceCount-1)
           {CUDACHECK(cudaSetDevice(i));
-    	   split_global<<<dimGrid_N, dimBlock_N,dimBlock_N>>>(d_num[i],d_info[i]+i*sub_length,sub_length);}
-       else
+    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T)>>>(d_num[i],d_info[i],i*sub_length,sub_length);
+          }
+          else
           {CUDACHECK(cudaSetDevice(i));
-    	   split_global<<<dimGrid_N, dimBlock_N,dimBlock_N>>>(d_num[i],d_info[i]+(deviceCount-1)*sub_length,sub_length+yu);}
-    }
-       for(int i=0;i<deviceCount;i++){
-         CUDACHECK(cudaSetDevice(i));
-	     CUDACHECK(cudaDeviceSynchronize());
-       }
-   	return max;
+    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T)>>>(d_num[i],d_info[i],(deviceCount-1)*sub_length,sub_length+yu);
+          }
+      }
+
+      for (int i = 0;i < deviceCount;i++)
+      {
+          CUDACHECK(cudaSetDevice(i));
+          CUDACHECK(cudaDeviceSynchronize());
+      }
+
+      for (int i = 0; i < deviceCount;i++)
+      {
+          CUDACHECK(cudaSetDevice(i));
+          CUDACHECK(cudaMemcpy(h_num[i],d_num[i],2*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost));
+      }
+
+      for (int i = 0; i < deviceCount;i++)
+      {
+          CUDACHECK(cudaSetDevice(i));
+          CUDACHECK(cudaDeviceSynchronize());
+      }
+
+      for (int i = 0; i < deviceCount;i++)
+      {  for (int j = 0; j < dimGrid_N*dimBlock_N;j++)
+          {
+        	 if((int)h_num[i][j*2]>(int)max[0]){
+        		 max[0]=h_num[i][j*2];
+//        		 printf("max[0]：=%d \n",max[0]);
+        	 }
+
+        	 if((int)h_num[i][j*2+1]>(int)max[1]){
+        		 max[1]=h_num[i][j*2+1];
+//        		 printf("max[1]：=%d \n",max[1]);
+        	 }
+        	     if(j<=2 and (h_num[i][j*2]!=0 or h_num[i][j*2+1]!=0))
+        	     printf("max[0]=%d,max[1]=%d,i:=%d,j:=%d \n",(int)h_num[i][j*2],(int)h_num[i][j*2+1],i,j);
+          }
+      }
+
+      printf("%d,%d \n", max[0], max[1]);
+      return max;
 };
+
+template class split<byte>;
+template class split<int>;
 

@@ -59,7 +59,7 @@ file_input::info* file_input::input(){
         info_return->total_row=j-1;
         info_return->total_size=m_uSize+1;
         info_return->split_mark=(int*)malloc((j-1)*sizeof(int));
-        memcpy(info_return->split_mark,enter,(j-1)*sizeof(int));//记录其中回车符号的位置
+        memcpy(info_return->split_mark,enter,(j-1)*sizeof(int));
         delete enter;
 	    return info_return;
 }

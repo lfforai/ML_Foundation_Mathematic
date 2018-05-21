@@ -34,6 +34,7 @@
 #include <helper_cuda.h>
 #include "file_input.h"
 #include <src/split.h>
+#include <src/cudalib.h>
 
 using namespace std;
 
@@ -41,9 +42,19 @@ using namespace std;
 /* Main */
 int main(int argc, char **argv)
 {file_input::info* re =file_input::input();
- //printf("%s",re->data);
- printf("input total rows is:=%ld \n",re->total_row);
- split::max_ancestors_num(re,2);
+// printf("%s",re->data);
+// printf("input total rows is:=%ld \n",re->total_row);
+// for (int i=0;i<re->total_row;i++)
+//     {printf("i:=%d,re:=%d \n",i,*(re->split_mark+i));}
+
+// byte* a=(byte*)malloc(2*sizeof(byte));
+// byte* rex="@MDNY.SZWQ.11MD#27.AtPwrSet\n";
+// len<byte>((byte *)rex+strlen((char *)rex),a);
+// printf("%d,%d \n",(int)a[0],(int)a[1]);
+// char* re_temp=(char *)malloc(100);
+// memcpy(re_temp,re->data,100);
+// printf("%s",re_temp);
+ byte* max=split<byte>::max_ancestors_num(re,2);
  delete re->data;
  delete re;
  printf("start!");
