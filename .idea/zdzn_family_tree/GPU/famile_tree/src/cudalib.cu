@@ -27,7 +27,6 @@ __host__ __device__ void len(const char*info,T*result)
   int i=0;//index
   char frist_mark=(byte)0;
   while(*(info+i)!='@'){
-
 	  if((*(info+i)=='.' or *(info+i)=='_')){
 		  result[0]=(T)((int)result[0]+(int)1);
 	  }
@@ -40,17 +39,18 @@ __host__ __device__ void len(const char*info,T*result)
 	  }
 	  i=i-1;
   }
+  result[2]=(T)(abs(i)-2);
 }
 
 template <class T>
 __global__ void split_global(T* dum, char* info,long start,long length,int dimblock)
 {       extern __shared__ byte s[];
         if (threadIdx.x==0){
-           memset(s,(byte)0,2*dimblock*sizeof(T));
+           memset(s,(byte)0,3*dimblock*sizeof(T));
         }
     	__syncthreads();
 //		T* temp=(T*)malloc(2*sizeof(T));
-		T temp[2];
+		T temp[3];
 		long length_N = length;
 		int step = gridDim.x*blockDim.x;
 		const long start_P=start;//开始的位置
@@ -61,8 +61,8 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 		        {  temp[0]=0;
 				   temp[1]=0;
 		           len(info+start+start_P,temp);
-		           if((int)temp[0]>(int)s[threadIdx.x*2]){
-		        	   s[threadIdx.x*2]=temp[0];
+		           if((int)temp[0]>(int)s[threadIdx.x*3]){
+		        	   s[threadIdx.x*3]=temp[0];
 //		        	   if((int)temp[0]<1)
 //		        	     {T* temp_s=(T*)malloc((temp[1]+21)*sizeof(T));
 //						  memcpy(temp_s,info+(start+start_P-(int)temp[1]-20)*sizeof(T),((int)temp[1]+21)*sizeof(T));
@@ -80,10 +80,13 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 //		        	   						  delete temp_s;
 //		           		        	   }
 
-		           if((int)temp[1]>(int)s[threadIdx.x*2+1]){
-		        	   s[threadIdx.x*2+1]=temp[1];
+		           if((int)temp[1]>(int)s[threadIdx.x*3+2]){
+		        	   s[threadIdx.x*3+1]=temp[1];
 		           }
 
+		           if((int)temp[2]>(int)s[threadIdx.x*3+2]){
+		        	   s[threadIdx.x*3+2]=temp[2];
+		           }
 //		           if((int)temp[0]>6)
 //		         				 {printf("-------大于6开始-------- \n");
 //		         				  T* temp_s=(T*)malloc((temp[1]+1)*sizeof(T));
@@ -99,7 +102,7 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 		//同步
 		__syncthreads();
 		if(threadIdx.x==0)
-		memcpy(dum+2*blockIdx.x*blockDim.x*sizeof(T),s,2*blockDim.x*sizeof(T));
+		memcpy(dum+3*blockIdx.x*blockDim.x*sizeof(T),s,3*blockDim.x*sizeof(T));
 		__syncthreads();
 }
 

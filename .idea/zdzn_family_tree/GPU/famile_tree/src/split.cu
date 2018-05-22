@@ -39,15 +39,18 @@ split<T>::~split() {
 
 //返回所有key值中分解出的最多的一个祖先个数
 //例如：MDNY.SZWQ.11MD#1.MlyGnCptLo,祖先个数为3
-//返回keys列表中单个key最大祖先个数和最大字符串长度
+//返回keys列表中单个key最大祖先个数、最大祖先字符串长度，本身字符串最大长度
 template<typename T>
 T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
 	int dimGrid_N=224;
 	int dimBlock_N=256;
+	int result_n=3;//需要输出几种结果：目前为3
 
-    T* max=(T*)malloc(2*sizeof(T));//max[0]:祖先最大数，max[1]:key的最大长度
+    T* max=(T*)malloc(result_n*sizeof(T));//max[0]:祖先最大数，max[1]:key的最大长度
     max[0]=(T)0;
     max[1]=(T)0;
+    max[2]=(T)0;
+
     char* keys_data=info_of_key->data;
 //  long row_num=info_of_key->total_row;
     long buffer_size=info_of_key->total_size;//字节数
@@ -64,24 +67,21 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
     long yu= buffer_size%deviceCount;
     long sub_length=buffer_size/deviceCount;
 
-    cudaOccupancyMaxPotentialBlockSize(
+    for(int i=0;i<2;i++)
+    {cudaOccupancyMaxPotentialBlockSize(
 		&dimGrid_N,
 		&dimBlock_N,
 		(void*)split_global<T>,
-		2*dimBlock_N*sizeof(T),
+		result_n*dimBlock_N*sizeof(T),
 		2048);
-//    printf("dimGrid_N=:%d,dimBlock_N:=%d \n",dimGrid_N,dimBlock_N);
-//    dimGrid_N=10;
-//    dimBlock_N=32;
-//    dimGrid_N=32;
-//    dimBlock_N=32;
-//    printf("%d,%d \n",dimGrid_N,dimBlock_N);
+        printf("第%d次：dimGrid_N=:%d,dimBlock_N:=%d \n",i,dimGrid_N,dimBlock_N);
+    }
 
     //此处假设所有的祖先不超过255个，所以采用char
     for(int i=0;i<deviceCount;i++){
     	CUDACHECK(cudaSetDevice(i));
-    	h_num[i]=(T *)malloc(2*dimGrid_N*dimBlock_N*sizeof(T));
-        CUDACHECK(cudaMalloc(d_num+i,2*dimGrid_N*dimBlock_N*sizeof(T)));
+    	h_num[i]=(T *)malloc(result_n*dimGrid_N*dimBlock_N*sizeof(T));
+        CUDACHECK(cudaMalloc(d_num+i,result_n*dimGrid_N*dimBlock_N*sizeof(T)));
         CUDACHECK(cudaMalloc(d_info+i,buffer_size* sizeof(char)));
         if (i==0){//gpu较多情况下使用nccl，在gpu较少情况下可以不使用nccl，这里统一使用nccl无论gpu个数
            CUDACHECK(cudaMemcpy(d_info[i],keys_data,buffer_size*sizeof(char), cudaMemcpyHostToDevice));
@@ -128,19 +128,19 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
       {   CUDACHECK(cudaSetDevice(i));
           if (i!=deviceCount-1)
           {
-    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T),s[i]>>>(d_num[i],d_info[i],i*sub_length,sub_length,dimBlock_N);
+    	   split_global<T><<<dimGrid_N, dimBlock_N,result_n*dimBlock_N*sizeof(T),s[i]>>>(d_num[i],d_info[i],i*sub_length,sub_length,dimBlock_N);
     	   //2*dimBlock_N*sizeof(T)
           }
           else
           {
-    	   split_global<T><<<dimGrid_N, dimBlock_N,2*dimBlock_N*sizeof(T),s[i]>>>(d_num[i],d_info[i],(deviceCount-1)*sub_length,sub_length+yu,dimBlock_N);
+    	   split_global<T><<<dimGrid_N, dimBlock_N,result_n*dimBlock_N*sizeof(T),s[i]>>>(d_num[i],d_info[i],(deviceCount-1)*sub_length,sub_length+yu,dimBlock_N);
           }
       }
 
       for (int i = 0;i < deviceCount;i++)
         {
             CUDACHECK(cudaSetDevice(i));
-            CUDACHECK(cudaMemcpyAsync(h_num[i],d_num[i],2*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost,s[i]));
+            CUDACHECK(cudaMemcpyAsync(h_num[i],d_num[i],result_n*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost,s[i]));
         }
 
 
@@ -156,13 +156,18 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
       for (int i = 0; i < deviceCount;i++)
       {  for (int j = 0; j < dimGrid_N*dimBlock_N;j++)
           {
-        	 if((int)h_num[i][j*2]>(int)max[0]){
-        		 max[0]=h_num[i][j*2];
+        	 if((int)h_num[i][j*result_n]>(int)max[0]){
+        		 max[0]=h_num[i][j*result_n];
 //        		 printf("max[0]：=%d \n",max[0]);
         	 }
 
-        	 if((int)h_num[i][j*2+1]>(int)max[1]){
-        		 max[1]=h_num[i][j*2+1];
+        	 if((int)h_num[i][j*result_n+1]>(int)max[1]){
+        		 max[1]=h_num[i][j*result_n+1];
+//        		 printf("max[1]：=%d \n",max[1]);
+        	 }
+
+        	 if((int)h_num[i][j*result_n+2]>(int)max[2]){
+        		 max[2]=h_num[i][j*result_n+2];
 //        		 printf("max[1]：=%d \n",max[1]);
         	 }
 //        	     if(j<2 and (h_num[i][j*2]!=0 or h_num[i][j*2+1]!=0))
@@ -170,7 +175,7 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
           }
       }
 
-      printf("%d,%d \n", max[0], max[1]);
+      printf("%d,%d,%d \n",max[0],max[1],max[2]);
       return max;
 };
 
