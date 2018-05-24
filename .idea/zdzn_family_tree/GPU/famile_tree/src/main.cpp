@@ -35,6 +35,7 @@
 #include "file_input.h"
 #include <src/split.h>
 #include <src/cudalib.h>
+#include <src/hashtablegpu.h>
 
 using namespace std;
 
@@ -47,14 +48,16 @@ int main(int argc, char **argv)
 // for (int i=0;i<re->total_row;i++)
 //     {printf("i:=%d,re:=%d \n",i,*(re->split_mark+i));}
 
- byte* a=(byte*)malloc(3*sizeof(byte));
- byte* rex="@MDNY.SZWQ.11MD#1_K#1.d\n";
- len<byte>((byte *)rex+strlen((char *)rex),a);
- printf("%d,%d,%d \n",(int)a[0],(int)a[1],(int)a[2]);
+// byte* a=(byte*)malloc(3*sizeof(byte));
+// byte* rex="@MDNY.SZWQ.11MD#1_K#1.d\n";
+// len<byte>((byte *)rex+strlen((char *)rex),a);
+// printf("%d,%d,%d \n",(int)a[0],(int)a[1],(int)a[2]);
 //	 char* re_temp=(char *)malloc(100);
 //	 memcpy(re_temp,re->data,100);
 //	 printf("%s",re_temp);
- byte* max=split<byte>::max_ancestors_num(re,2);
+// byte* max=split<byte>::max_ancestors_num(re,2);
+
+ hashtable_gpu<byte,byte> hash(3,5,5,5,2);
  delete re->data;
  delete re;
  printf("start!");
