@@ -21,6 +21,7 @@
 #include <string>
 using namespace std;
 
+//统计最大祖先个数、最大祖先长度和最大单条长度
 template <class T>
 __host__ __device__ void len(const char*info,T*result)
 {
@@ -63,22 +64,8 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 		           len(info+start+start_P,temp);
 		           if((int)temp[0]>(int)s[threadIdx.x*3]){
 		        	   s[threadIdx.x*3]=temp[0];
-//		        	   if((int)temp[0]<1)
-//		        	     {T* temp_s=(T*)malloc((temp[1]+21)*sizeof(T));
-//						  memcpy(temp_s,info+(start+start_P-(int)temp[1]-20)*sizeof(T),((int)temp[1]+21)*sizeof(T));
-//						  printf("s0:%c,s1:%d,s2:%d,小于零:=%s \n",(char)(*(info+start+start_P-1)),(int)temp[0],(int)temp[1],temp_s);
-//						  printf("------------------------ \n");
-//						  delete temp_s;
-//		        	     }
 		           }
 
-//		           if(threadIdx.x<3 and start==start_N){
-//		        	   T* temp_s=(T*)malloc(temp[1]*sizeof(T));
-//		        	   						  memcpy(temp_s,info+(start+start_P-(int)temp[1])*sizeof(T),(int)temp[1]*sizeof(T));
-//		        	   						  printf("123：===index:%d,s0:%c,s1:%d,s2:%d,:=%s \n",threadIdx.x,(char)(*(info+start+start_P-1)),(int)temp[0],(int)temp[1],temp_s);
-//		        	   						  printf("------------------------ \n");
-//		        	   						  delete temp_s;
-//		           		        	   }
 
 		           if((int)temp[1]>(int)s[threadIdx.x*3+2]){
 		        	   s[threadIdx.x*3+1]=temp[1];
@@ -87,14 +74,7 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 		           if((int)temp[2]>(int)s[threadIdx.x*3+2]){
 		        	   s[threadIdx.x*3+2]=temp[2];
 		           }
-//		           if((int)temp[0]>6)
-//		         				 {printf("-------大于6开始-------- \n");
-//		         				  T* temp_s=(T*)malloc((temp[1]+1)*sizeof(T));
-//		         				  memcpy(temp_s,info+(start+start_P-temp[1])*sizeof(T),temp[1]*sizeof(T));
-//		         				  printf("大于6：thread:=%d,最后一个:%c,temp0:=%d,temp1:=%d,内容:=%s \n",(int)threadIdx.x,(char)(*(info+start+start_P-1)),(int)temp[0],(int)temp[1],temp_s);
-//		         				  printf("-------大于6结束-------- \n");
-//		         				  delete temp_s;
-//		         				 }
+
 		        }
 		    }
 		delete temp;
@@ -105,6 +85,33 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 		memcpy(dum+3*blockIdx.x*blockDim.x*sizeof(T),s,3*blockDim.x*sizeof(T));
 		__syncthreads();
 }
+
+//切割出所有祖先，为放入hash表用
+//dimGrid_N, dimBlock_N,0,s[i]>>>(d_result[i]+h_len_result[deviceCount-2]*max_an_len*max_an_num,d_info[i],max_an_len,max_an_num,(deviceCount-1)*sub_length,sub_length+yu,dimBlock_N
+template <class T>
+__global__ void scut2ancestors(char* des,long max_an_len,char* info,long start,long length)
+{
+		long length_N = length;
+		int step = gridDim.x*blockDim.x;
+		const long start_P=start;//开始的位置
+		long start_N =threadIdx.x+blockIdx.x*blockDim.x;
+		for(long start=start_N;start<length_N;start=start+step)
+		   {
+			  if((char)*(info+start+start_P)=='\n')
+		        {
+
+		        }
+		    }
+		delete temp;
+
+		//同步
+		__syncthreads();
+		if(threadIdx.x==0)
+		memcpy(dum+3*blockIdx.x*blockDim.x*sizeof(T),s,3*blockDim.x*sizeof(T));
+		__syncthreads();
+}
+
+
 
 template __host__ __device__ void len<ubyte>(const char*,ubyte *);
 template __host__ __device__ void len<byte>(const char*,byte *);

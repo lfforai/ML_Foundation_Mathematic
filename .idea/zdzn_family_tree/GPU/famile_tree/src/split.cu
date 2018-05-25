@@ -161,6 +161,142 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
       return max;
 };
 
+
+//int num记录条数，max_an_len是祖先长度,max_an_num祖先个数，
+//按6个祖先，每个32最大长度，有1000万个点计算需要消耗内存为1.8g存储
+template<typename T>
+char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int max_an_len,int GPU_num){
+    int num=info_of_key->total_row;
+    char* keys_data=info_of_key->data;
+    long buffer_size=info_of_key->total_size;//字节数
+	int dimGrid_N=224;
+	int dimBlock_N=256;
+
+	char* h_result=(char*)malloc(num*max_an_len*max_an_num*sizeof(char));
+
+	int deviceCount=2;
+	if (GPU_num==-1)
+	   {CUDACHECK(cudaGetDeviceCount(&deviceCount));}
+
+	//每个GPU分解一部分
+    char** d_result=(char **)malloc(deviceCount*sizeof(char*));
+    char** d_info=(char **)malloc(deviceCount*sizeof(char*));
+
+    //对输入数据的切割
+    long yu= buffer_size%deviceCount;
+    long sub_length=buffer_size/deviceCount;
+
+    //对应输入数据对输出数据进行切割------------------------------
+    //存放每个gpu开始的位置索引
+    int* h_len_result=(int*)malloc(deviceCount*sizeof(int));
+    for(int i=0;i<deviceCount;i++)
+    {  if(i!=0)
+       {for(int j=0;j<num-2;j++)
+          {if(i*sub_length>=info_of_key->split_mark[j] and i*sub_length<info_of_key->split_mark[j+1])
+        	  if(info_of_key->split_mark[info_of_key->split_mark[j]]!='\n')
+        	     h_len_result[i]=j+1;
+        	  else
+        		 h_len_result[i]=j;
+    	   }
+       }
+       else
+       {h_len_result[0]=0;}
+    }
+    //-------------------------切割结束----------------------------
+
+    for(int i=0;i<2;i++)
+    {cudaOccupancyMaxPotentialBlockSize(
+		&dimGrid_N,
+		&dimBlock_N,
+		(void*)split_global<T>,
+		sizeof(T),
+		2048);
+        printf("第%d次：dimGrid_N=:%d,dimBlock_N:=%d \n",i,dimGrid_N,dimBlock_N);
+    }
+
+    //初始化所有gpu上数据
+    for(int i=0;i<deviceCount;i++){
+    	CUDACHECK(cudaSetDevice(i));
+        CUDACHECK(cudaMalloc(d_result+i,num*max_an_len*max_an_num*sizeof(char)));
+        CUDACHECK(cudaMalloc(d_info+i,buffer_size* sizeof(char)));
+        if (i==0){//gpu较多情况下使用nccl，在gpu较少情况下可以不使用nccl，这里统一使用nccl无论gpu个数
+           CUDACHECK(cudaMemcpy(d_info[i],keys_data,buffer_size*sizeof(char), cudaMemcpyHostToDevice));
+        }
+    }
+
+//把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
+     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+     ncclComm_t* comms=(ncclComm_t*)malloc(deviceCount*sizeof(ncclComm_t));
+     //managing deviceCount devices
+     int* devs=(int *)malloc(deviceCount*sizeof(int));
+     for(int i=0;i<deviceCount;i++){
+    	  CUDACHECK(cudaSetDevice(i));
+    	  devs[i]=i;
+    	  CUDACHECK(cudaStreamCreate(s+i));
+     }
+
+     //initializing NCCL
+     NCCLCHECK(ncclCommInitAll(comms,deviceCount, devs));
+     //calling NCCL communication API. Group API is required when using
+     //multiple devices per thread
+     NCCLCHECK(ncclGroupStart());
+     for (int i = 0; i < deviceCount; ++i)
+   	     NCCLCHECK(ncclBcast((void*)d_info[i],buffer_size,ncclChar,0,comms[i], s[i]));
+     NCCLCHECK(ncclGroupEnd());
+     //synchronizing on CUDA streams to wait for completion of NCCL operation
+     for (int i = 0; i < deviceCount; ++i) {
+       CUDACHECK(cudaSetDevice(i));
+       CUDACHECK(cudaStreamSynchronize(s[i]));
+     }
+     //finalizing NCCL
+     for(int i = 0; i <deviceCount; ++i)
+          {ncclCommDestroy(comms[i]);
+           CUDACHECK(cudaStreamDestroy(s[i]));}
+//把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
+
+     s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+        for(int i=0;i<deviceCount;i++){
+       	  CUDACHECK(cudaSetDevice(i));
+       	  CUDACHECK(cudaStreamCreate(s+i));
+        }
+
+        //记录当前记录存放位置的变量
+        long** p_mark=(long** )malloc(deviceCount*sizeof(long*));
+        for(int i=0;i<deviceCount;i++){
+           CUDACHECK(cudaMalloc(p_mark+i,sizeof(long)));
+        }
+
+
+        for(int i=0;i<deviceCount;i++)
+        {   CUDACHECK(cudaSetDevice(i));
+            if (i==0)
+            {
+            scut2ancestors<T><<<dimGrid_N, dimBlock_N,0,s[i]>>>(d_result[i],max_an_len,d_info[i],i*sub_length,sub_length,p_mark[i]);
+            }
+            else
+            {
+            scut2ancestors<T><<<dimGrid_N, dimBlock_N,0,s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,d_info[i],(deviceCount-1)*sub_length,sub_length+yu,p_mark[i]);
+            }
+        }
+
+        for (int i = 0;i < deviceCount;i++)
+          {
+              CUDACHECK(cudaSetDevice(i));
+              CUDACHECK(cudaMemcpyAsync(h_num[i],d_num[i],result_n*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost,s[i]));
+          }
+
+
+        for (int i = 0;i < deviceCount;i++)
+        {
+            CUDACHECK(cudaSetDevice(i));
+            CUDACHECK(cudaStreamSynchronize(s[i]));
+        }
+
+        for(int i = 0; i <deviceCount; ++i)
+             {CUDACHECK(cudaStreamDestroy(s[i]));}
+
+}
+
 template class split<byte>;
 template class split<ubyte>;
 template class split<int>;

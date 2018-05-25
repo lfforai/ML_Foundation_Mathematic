@@ -22,6 +22,7 @@ class split {
 public:
 	split();
 	virtual ~split();
+	static char* cut2ancestors(file_input::info* info_of_key,int max_an_num,int max_an_len,int GPU_num);
 	static T* max_ancestors_num(file_input::info* info_of_key,int GPU_num);
 };
 #endif /* SPLIT_H_ */

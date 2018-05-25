@@ -43,7 +43,7 @@ using namespace std;
 /* Main */
 int main(int argc, char **argv)
 {file_input::info* re =file_input::input();
- // printf("%s",re->data);
+//  printf("%s",re->data);
 // printf("input total rows is:=%ld \n",re->total_row);
 // for (int i=0;i<re->total_row;i++)
 //     {printf("i:=%d,re:=%d \n",i,*(re->split_mark+i));}
@@ -56,8 +56,8 @@ int main(int argc, char **argv)
 //	 memcpy(re_temp,re->data,100);
 //	 printf("%s",re_temp);
 // byte* max=split<byte>::max_ancestors_num(re,2);
-
- hashtable_gpu<byte,byte> hash(3,5,5,5,2);
+//
+// hashtable_gpu<byte,byte> hash(3,5,5,5,2);
  delete re->data;
  delete re;
  printf("start!");

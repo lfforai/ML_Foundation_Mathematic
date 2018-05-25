@@ -57,9 +57,15 @@ file_input::info* file_input::input(){
 	    info * info_return=(info *)malloc(sizeof(info));
         info_return->data=result;
         info_return->total_row=j-1;
+
         info_return->total_size=m_uSize+1;
         info_return->split_mark=(int*)malloc((j-1)*sizeof(int));
         memcpy(info_return->split_mark,enter,(j-1)*sizeof(int));
+        //记录回车符号出现的位置
+//        for(int i=0;i<info_return->total_row;i++){
+//           printf("i:=%d n",info_return->split_mark[i]);
+//        }
+
         delete enter;
 	    return info_return;
 }
