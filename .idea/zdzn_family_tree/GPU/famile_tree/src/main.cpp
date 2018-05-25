@@ -55,9 +55,9 @@ int main(int argc, char **argv)
 //	 char* re_temp=(char *)malloc(100);
 //	 memcpy(re_temp,re->data,100);
 //	 printf("%s",re_temp);
-// byte* max=split<byte>::max_ancestors_num(re,2);
-//
+ byte* max=split<byte>::max_ancestors_num(re,2);
 // hashtable_gpu<byte,byte> hash(3,5,5,5,2);
+ split<byte>::cut2ancestors(re,(int)max[0],(int)max[1],2);
  delete re->data;
  delete re;
  printf("start!");

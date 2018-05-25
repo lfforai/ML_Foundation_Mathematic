@@ -172,13 +172,14 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
 	int dimGrid_N=224;
 	int dimBlock_N=256;
 
-	char* h_result=(char*)malloc(num*max_an_len*max_an_num*sizeof(char));
+
 
 	int deviceCount=2;
 	if (GPU_num==-1)
 	   {CUDACHECK(cudaGetDeviceCount(&deviceCount));}
 
 	//每个GPU分解一部分
+	char** h_result=(char**)malloc(deviceCount*sizeof(char*));
     char** d_result=(char **)malloc(deviceCount*sizeof(char*));
     char** d_info=(char **)malloc(deviceCount*sizeof(char*));
 
@@ -217,6 +218,7 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
     //初始化所有gpu上数据
     for(int i=0;i<deviceCount;i++){
     	CUDACHECK(cudaSetDevice(i));
+    	h_result[i]=(char *)malloc(num*max_an_len*max_an_num*sizeof(char));
         CUDACHECK(cudaMalloc(d_result+i,num*max_an_len*max_an_num*sizeof(char)));
         CUDACHECK(cudaMalloc(d_info+i,buffer_size* sizeof(char)));
         if (i==0){//gpu较多情况下使用nccl，在gpu较少情况下可以不使用nccl，这里统一使用nccl无论gpu个数
@@ -271,18 +273,20 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
         {   CUDACHECK(cudaSetDevice(i));
             if (i==0)
             {
-            scut2ancestors<T><<<dimGrid_N, dimBlock_N,0,s[i]>>>(d_result[i],max_an_len,d_info[i],i*sub_length,sub_length,p_mark[i]);
+            scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i],max_an_len,max_an_num,d_info[i],i*sub_length,sub_length,p_mark[i],dimBlock_N);
             }
             else
-            {
-            scut2ancestors<T><<<dimGrid_N, dimBlock_N,0,s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,d_info[i],(deviceCount-1)*sub_length,sub_length+yu,p_mark[i]);
+            { if(i==deviceCount-1)
+              scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],(deviceCount-1)*sub_length,sub_length+yu,p_mark[i],dimBlock_N);
+              else
+              scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],i*sub_length,sub_length,p_mark[i],dimBlock_N);
             }
         }
 
         for (int i = 0;i < deviceCount;i++)
           {
               CUDACHECK(cudaSetDevice(i));
-              CUDACHECK(cudaMemcpyAsync(h_num[i],d_num[i],result_n*dimGrid_N*dimBlock_N*sizeof(T),cudaMemcpyDeviceToHost,s[i]));
+              CUDACHECK(cudaMemcpyAsync(h_result[i],d_result[i],num*max_an_len*max_an_num*sizeof(char),cudaMemcpyDeviceToHost,s[i]));
           }
 
 
@@ -295,6 +299,10 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
         for(int i = 0; i <deviceCount; ++i)
              {CUDACHECK(cudaStreamDestroy(s[i]));}
 
+        for(int i = 0; i <deviceCount; ++i)
+        {
+        	printf("s% \n",h_result[i]);
+        }
 }
 
 template class split<byte>;
