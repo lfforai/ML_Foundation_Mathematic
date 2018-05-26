@@ -166,8 +166,12 @@ __global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* inf
 					  position=(unsigned long long int )atomicAdd((unsigned long long int  *)mark,(unsigned long long int )1);
 					  memcpy(des+position*max_an_len,info+start+start_P+last_i_N,s[threadIdx.x*max_an_num+an_num]-last_i_N);
 					  *(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N)='\0';
-//					  if(*(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='.')
-//					  printf("%s||%c,%c,%d,%d \n",des+position*max_an_len,*(info+start+start_P+dian_i),*(info+start+start_P+last_i_N),s[threadIdx.x*max_an_num+an_num],an_num);
+					  if(*(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='.' or *(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='_')
+					   {printf("%s||%c,%c,%d,%d \n",des+position*max_an_len,*(info+start+start_P+dian_i),*(info+start+start_P+last_i_N),(int)s[threadIdx.x*max_an_num+an_num],an_num);
+					    for(int i_i=0;i_i<max_an_num;i_i++){
+					    	printf("eacth=:%s||%d,%d \n",des+position*max_an_len,(int)s[threadIdx.x*max_an_num+i_i],i_i);
+					    }
+					   }
 					  an_num=an_num+1;
 				  }
 
