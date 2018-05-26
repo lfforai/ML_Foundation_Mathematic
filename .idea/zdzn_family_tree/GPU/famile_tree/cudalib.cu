@@ -50,6 +50,7 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
            memset(s,(byte)0,3*dimblock*sizeof(T));
         }
     	__syncthreads();
+
 //		T* temp=(T*)malloc(2*sizeof(T));
 		T temp[3];
 		long length_N = length;
@@ -61,12 +62,13 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 			  if((char)*(info+start+start_P)=='\n')
 		        {  temp[0]=0;
 				   temp[1]=0;
+				   temp[2]=0;
 		           len(info+start+start_P,temp);
 		           if((int)temp[0]>(int)s[threadIdx.x*3]){
 		        	   s[threadIdx.x*3]=temp[0];
 		           }
 
-		           if((int)temp[1]>(int)s[threadIdx.x*3+2]){
+		           if((int)temp[1]>(int)s[threadIdx.x*3+1]){
 		        	   s[threadIdx.x*3+1]=temp[1];
 		           }
 
@@ -76,7 +78,7 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 
 		        }
 		    }
-		delete temp;
+		free(temp);
 
 		//同步
 		__syncthreads();
@@ -122,77 +124,57 @@ __global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* inf
 //				  printf("a:=%c \n",*(info+start+start_P+i));
 				  dian_i=dian_i-1;//最大祖先的开始位置info+start+start_P+dian_i
 				  last_i=last_i+1;//最大祖先的结束位置info+start+start_P+last_i
-//				  printf("b:=%c \n",*(info+start+start_P+dian_i));
-//				  printf("c:=%c \n",*(info+start+start_P+last_i));
 				  //----------------------------------------------------
-//
+
+
 //				  //2、记录各级祖先节点的位置----"."和“—”
 				  int last_i_N=last_i;//保留祖先开始位置记录
-//				  printf("dian_i=%d,last_i_N=%d \n",dian_i,last_i_N);
+				  int dian_i_N=dian_i+1;//“.”位置
 				  int an_num=0;//祖先数目
-				  while(last_i<=dian_i+1 and an_num<max_an_num){
+				  while(last_i<=dian_i_N and an_num<max_an_num){
 					  if(*(info+start+start_P+last_i)=='.' or *(info+start+start_P+last_i)=='_'){
-						s[threadIdx.x*max_an_num+an_num]=(T)last_i;
-//						printf("*(info+start+start_P+last_i)=%c \n",(char)*(info+start+start_P+last_i));
-						an_num=1+an_num;
+						s[threadIdx.x*max_an_num+an_num]=last_i;
+//						printf("*(info+start+start_P+s[w]):%c,theid:=%d \n",*(info+start+start_P+s[threadIdx.x*max_an_num+an_num]),threadIdx.x*max_an_num+an_num);
+						an_num=an_num+1;
 					  }
 					  last_i=last_i+1;
 				  }
 
-//				  //最后一个祖先节点位置
-//				  s[threadIdx.x*max_an_num+an_num+1]=(T)last_i;
-//				  char* tem_a=(char*)malloc(dian_i-last_i_N+2);
-//				  memcpy(tem_a,info+start+start_P+last_i_N,dian_i-last_i_N+1);
-//				  *(tem_a+dian_i-last_i_N+1)='\0';
-//
-//				   if(*(tem_a+dian_i-last_i_N)=='.')
-//				   {
-//					 printf("a:=%s \n",tem_a);
-//				     printf("an_num:=%d \n",an_num);
-//				     for(int t=0;t<an_num;t++)
-//					    {printf("s[threadIdx.x*max_an_num+an_num+1]:=%d,an_num:=%d \n", (int)s[threadIdx.x*max_an_num+t],t);
-//					     printf("-------------------------------\n");}
-////				   				   printf("dian_i:=%c \n",*(info+start+start_P+dian_i));
-////				   				   printf("last_i:=%c \n",*(info+start+start_P+last_i_N));
-//				   }
-//				   delete tem_a;
-
-
-//
 //				  //3、依次输出各祖先节点
 				  an_num=0;
 				  unsigned long long int  position=0;
-				  while(s[threadIdx.x*max_an_num+an_num]!=0 and an_num<max_an_num){
-					  position=(unsigned long long int )atomicAdd((unsigned long long int  *)mark,(unsigned long long int )1);
-					  if((char)*(info+start+start_P+s[threadIdx.x*max_an_num+an_num])=='.' or (char)*(info+start+start_P+s[threadIdx.x*max_an_num+an_num])=='_')
-					  {memcpy(des+position*max_an_len,info+start+start_P+last_i_N,s[threadIdx.x*max_an_num+an_num]-last_i_N);
-					  *(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N)='\0';}
-					  if(*(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='.' or *(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='_')
-					   {printf("%s||%c,%c,%d,%d \n",des+position*max_an_len,*(info+start+start_P+dian_i),*(info+start+start_P+last_i_N),(int)s[threadIdx.x*max_an_num+an_num],an_num);
-
-					    char* tem_a=(char*)malloc(dian_i-last_i_N+2);
-					  	memcpy(tem_a,info+start+start_P+last_i_N,dian_i-last_i_N+1);
-					  				  *(tem_a+dian_i-last_i_N+1)='\0';
-
-					    for(int i_i=0;i_i<max_an_num;i_i++){
-					    	printf("eacth=:%s||%d,%d \n",tem_a,(int)s[threadIdx.x*max_an_num+i_i],i_i);
-					    }
-					    delete tem_a;
-					   }
-
-					  an_num=an_num+1;
+				  //(*(info+start+start_P+s[threadIdx.x*max_an_num+an_num])=='.' or *(info+start+start_P+s[threadIdx.x*max_an_num+an_num])=='_')  and
+				  while((*(info+start+start_P+s[threadIdx.x*max_an_num+an_num])=='.' or *(info+start+start_P+s[threadIdx.x*max_an_num+an_num])=='_') and an_num<max_an_num){
+					   position=(unsigned long long int )atomicAdd((unsigned long long int  *)mark,(unsigned long long int )1);
+					   memcpy(des+position*max_an_len,info+start+start_P+last_i_N,s[threadIdx.x*max_an_num+an_num]-last_i_N);
+					   *(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N)='\0';
+//					   if(*(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='.')
+//					   {char* temp=(char *)malloc(-last_i_N);
+//					    memcpy(temp,info+start+start_P+last_i_N,-last_i_N);
+//					    *(temp-last_i_N)='\0';
+//						printf("n:=%s||%s||%c,%c,%d,%d \n",des+position*max_an_len,temp,*(info+start+start_P+dian_i),*(info+start+start_P+last_i_N),(int)s[threadIdx.x*max_an_num+an_num],an_num);
+//					   }
+					   an_num=an_num+1;
 				  }
 
+				  //放入整条记录
+				  position=(unsigned long long int )atomicAdd((unsigned long long int  *)mark,(unsigned long long int )1);
+				  memcpy(des+position*max_an_len,info+start+start_P+last_i_N,-last_i_N+1);
+				  *(des+position*max_an_len-last_i_N)='\0';
+//				  if(*(des+position*max_an_len)=='\0')
+//				  {char* temp=(char *)malloc(-last_i_N+1);
+//				   memcpy(temp,info+start+start_P+last_i_N,-last_i_N);
+//				   *(temp-last_i_N)='\0';
+//				   printf("ok::%s||%s||%c,%c,%d,%d \n",des+position*max_an_len,temp,*(info+start+start_P+dian_i),*(info+start+start_P+last_i_N),(int)s[threadIdx.x*max_an_num+an_num],an_num);
+//				   delete temp;
+//				  }
+//				  printf("ok:=%s \n",des+position*max_an_len);
+
 				  __syncthreads();
-				  if(threadIdx.x==0){
-							memset(s,(byte)0,max_an_num*dimblock*sizeof(T));
-						}
+				  if(threadIdx.x==0){memset(s,(byte)0,max_an_num*dimblock*sizeof(T));}
 				  __syncthreads();
 		        }
 		    }
-
-		//同步
-		__syncthreads();
 }
 
 template __host__ __device__ void len<ubyte>(const char*,ubyte *);
