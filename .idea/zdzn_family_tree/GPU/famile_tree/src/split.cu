@@ -202,15 +202,17 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
        }
        else
        {h_len_result[0]=0;}
+       printf(" h_len_result[i]:=%d \n",h_len_result[i]);
     }
+
     //-------------------------切割结束----------------------------
 
     for(int i=0;i<2;i++)
     {cudaOccupancyMaxPotentialBlockSize(
 		&dimGrid_N,
 		&dimBlock_N,
-		(void*)split_global<T>,
-		sizeof(T),
+		(void*)scut2ancestors<T>,
+		max_an_num*dimBlock_N*sizeof(T),
 		2048);
         printf("第%d次：dimGrid_N=:%d,dimBlock_N:=%d \n",i,dimGrid_N,dimBlock_N);
     }
@@ -263,9 +265,10 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
         }
 
         //记录当前记录存放位置的变量
-        long** p_mark=(long** )malloc(deviceCount*sizeof(long*));
+        unsigned long long int ** p_mark=(unsigned long long int ** )malloc(deviceCount*sizeof(unsigned long long int *));
         for(int i=0;i<deviceCount;i++){
-           CUDACHECK(cudaMalloc(p_mark+i,sizeof(long)));
+           CUDACHECK(cudaSetDevice(i));
+           CUDACHECK(cudaMalloc(p_mark+i,sizeof(unsigned long long int)));
         }
 
 
@@ -277,7 +280,7 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
             }
             else
             { if(i==deviceCount-1)
-              scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],(deviceCount-1)*sub_length,sub_length+yu,p_mark[i],dimBlock_N);
+              scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],i*sub_length,sub_length+yu,p_mark[i],dimBlock_N);
               else
               scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],i*sub_length,sub_length,p_mark[i],dimBlock_N);
             }

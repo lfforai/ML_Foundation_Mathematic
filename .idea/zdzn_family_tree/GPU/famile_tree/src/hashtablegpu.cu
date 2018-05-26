@@ -98,9 +98,9 @@ hashtable_gpu<T1,T2>::hashtable_gpu(int Gd,int Gd_max,int e_key_len,int e_value_
 
 //按所属gpu将桶分解到不同的device上去
 
-//    for(int i=0;i<bucketNum_max;i++){
-//    	printf("i:=%d,gpu_index=%d,Ld=%d,Ld_init=%d,frist=%d \n",i,init_bucketList[i].gpu_index,init_bucketList[i].Ld,init_bucketList[i].Ld_init,init_bucketList[i].first_Ld);
-//    }
+    for(int i=0;i<bucketNum_max;i++){
+    	printf("i:=%d,gpu_index=%d,Ld=%d,Ld_init=%d,frist=%d \n",i,init_bucketList[i].gpu_index,init_bucketList[i].Ld,init_bucketList[i].Ld_init,init_bucketList[i].first_Ld);
+    }
 
 //       CUDACHECK(cudaSetDevice(i));
  }

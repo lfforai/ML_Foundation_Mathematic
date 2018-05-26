@@ -57,7 +57,7 @@ int main(int argc, char **argv)
 //	 printf("%s",re_temp);
  byte* max=split<byte>::max_ancestors_num(re,2);
 // hashtable_gpu<byte,byte> hash(3,5,5,5,2);
- split<byte>::cut2ancestors(re,(int)max[0],(int)max[1],2);
+ split<byte>::cut2ancestors(re,(int)max[0],(int)max[1]+1,2);
  delete re->data;
  delete re;
  printf("start!");

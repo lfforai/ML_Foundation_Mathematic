@@ -88,7 +88,7 @@ __global__ void split_global(T* dum, char* info,long start,long length,int dimbl
 //切割出所有祖先，为放入hash表用
 //dimGrid_N, dimBlock_N,0,s[i]>>>(d_result[i]+h_len_result[deviceCount-2]*max_an_len*max_an_num,d_info[i],max_an_len,max_an_num,(deviceCount-1)*sub_length,sub_length+yu,dimBlock_N
 template <class T>
-__global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* info,long start,long length,long* mark,int dimblock)
+__global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* info,long start,long length,unsigned long long int* mark,int dimblock)
 {       //为每个thread分配空间记录当前分解记录的各"_"和“.”的位置
 	    extern __shared__ byte s[];
 		long length_N = length;
@@ -104,7 +104,8 @@ __global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* inf
 		for(long start=start_N;start<length_N;start=start+step)
 		   {
 			  if((char)*(info+start+start_P)=='\n')
-		        { //1、-----------------------------------------------------
+		        { //所有的相对位置都是相对于每个‘\n’回车符号来的
+				  //1、-----------------------------------------------------
 				  int dian_i=0;//第一个"."前面的最大祖先的根位置
 				  int last_i=0;//开始的"@"
 
@@ -118,31 +119,62 @@ __global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* inf
 		           i=i-1;
 		          }
 				  last_i=i;
+//				  printf("a:=%c \n",*(info+start+start_P+i));
 				  dian_i=dian_i-1;//最大祖先的开始位置info+start+start_P+dian_i
 				  last_i=last_i+1;//最大祖先的结束位置info+start+start_P+last_i
+//				  printf("b:=%c \n",*(info+start+start_P+dian_i));
+//				  printf("c:=%c \n",*(info+start+start_P+last_i));
 				  //----------------------------------------------------
-
-				  //2、记录各级祖先节点的位置----"."和“—”
+//
+//				  //2、记录各级祖先节点的位置----"."和“—”
 				  int last_i_N=last_i;//保留祖先开始位置记录
+//				  printf("dian_i=%d,last_i_N=%d \n",dian_i,last_i_N);
 				  int an_num=0;//祖先数目
-				  while(last_i<=dian_i){
+				  while(last_i<=dian_i+1){
 					  if(*(info+start+start_P+last_i)=='.' or *(info+start+start_P+last_i)=='_'){
 						s[threadIdx.x*max_an_num+an_num]=(T)last_i;
+//						printf("*(info+start+start_P+last_i)=%c \n",(char)*(info+start+start_P+last_i));
 						an_num=1+an_num;
 					  }
 					  last_i=last_i+1;
 				  }
-				  //最后一个祖先节点位置
-				  s[threadIdx.x*max_an_num+an_num+1]=(T)last_i;
 
-				  //3、依次输出各祖先节点
+//				  //最后一个祖先节点位置
+//				  s[threadIdx.x*max_an_num+an_num+1]=(T)last_i;
+				  char* tem_a=(char*)malloc(dian_i-last_i_N+2);
+				  memcpy(tem_a,info+start+start_P+last_i_N,dian_i-last_i_N+1);
+				  *(tem_a+dian_i-last_i_N+1)='\0';
+
+				   if(*(tem_a+dian_i-last_i_N)=='.')
+				   {
+					 printf("a:=%s \n",tem_a);
+				     printf("an_num:=%d \n",an_num);
+				     for(int t=0;t<an_num;t++)
+					    {printf("s[threadIdx.x*max_an_num+an_num+1]:=%d,an_num:=%d \n", (int)s[threadIdx.x*max_an_num+t],t);
+					     printf("-------------------------------\n");}
+//				   				   printf("dian_i:=%c \n",*(info+start+start_P+dian_i));
+//				   				   printf("last_i:=%c \n",*(info+start+start_P+last_i_N));
+				   }
+				   delete tem_a;
+
+
+//
+//				  //3、依次输出各祖先节点
 				  an_num=0;
-				  long position=0;
-				  while(s[threadIdx.x*max_an_num+an_num]!=0){
-					  position=(long)atomicAdd((int *)mark,(int)1);
-					  memcpy(des+position*max_an_len,info+start+start_P+dian_i,s[threadIdx.x*max_an_num+an_num]-last_i_N);
+				  unsigned long long int  position=0;
+				  while(s[threadIdx.x*max_an_num+an_num]!=0 and an_num<max_an_num){
+					  position=(unsigned long long int )atomicAdd((unsigned long long int  *)mark,(unsigned long long int )1);
+					  memcpy(des+position*max_an_len,info+start+start_P+last_i_N,s[threadIdx.x*max_an_num+an_num]-last_i_N);
+					  *(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N)='\0';
+//					  if(*(des+position*max_an_len+s[threadIdx.x*max_an_num+an_num]-last_i_N-1)=='.')
+//					  printf("%s||%c,%c,%d,%d \n",des+position*max_an_len,*(info+start+start_P+dian_i),*(info+start+start_P+last_i_N),s[threadIdx.x*max_an_num+an_num],an_num);
 					  an_num=an_num+1;
 				  }
+
+//
+
+//				  printf("an_num:=%d \n",(int)an_num);
+				  __syncthreads();
 				  if(threadIdx.x==0){
 							memset(s,(byte)0,max_an_num*dimblock*sizeof(T));
 						}
@@ -156,12 +188,12 @@ __global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* inf
 
 template __host__ __device__ void len<ubyte>(const char*,ubyte *);
 template __host__ __device__ void len<byte>(const char*,byte *);
+template __host__ __device__ void len<int>(const char*,int *);
+
 template __global__ void split_global<ubyte>(ubyte*, char*,long,long,int);
 template __global__ void split_global<byte>(byte*, char*,long,long,int);
-
-template __host__ __device__ void len<int>(const char*,int *);
 template __global__ void split_global<int>(int*, char*,long,long,int);
 
-template __global__ void scut2ancestors<byte>(char*,int ,int ,char*,long,long,long*,int);
-template __global__ void scut2ancestors<ubyte>(char*,int ,int ,char*,long,long,long*,int);
-template __global__ void scut2ancestors<int>(char*,int ,int ,char*,long,long,long*,int);
+template __global__ void scut2ancestors<byte>(char*,int ,int ,char*,long,long,unsigned long long int *,int);
+template __global__ void scut2ancestors<ubyte>(char*,int ,int ,char*,long,long,unsigned long long int *,int);
+template __global__ void scut2ancestors<int>(char*,int ,int ,char*,long,long,unsigned long long int *,int);
