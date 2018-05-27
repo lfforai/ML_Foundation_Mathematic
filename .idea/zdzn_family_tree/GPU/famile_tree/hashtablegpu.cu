@@ -112,11 +112,11 @@ template<typename T1,typename T2>
 void hashtable_gpu<T1,T2>::Predo(char* input,int max_an_len){
     int j=0;
     while(*(input+j*max_an_len)!='&'){
-//    	   if(*(result+j*max_an_len)=='\0')
-           printf("i=:%d,%s \n",j,input+j*max_an_len);
+////    	   if(*(result+j*max_an_len)=='\0')
+//           printf("i=:%d,%s \n",j,input+j*max_an_len);
            j++;
      }
-     cout<<"hehe:"<<j<<endl;
+     cout<<"length:"<<j-1<<endl;
 }
 
 template<typename T1,typename T2>

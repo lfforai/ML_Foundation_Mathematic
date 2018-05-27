@@ -58,8 +58,6 @@ int main(int argc, char **argv)
  byte* max=split<byte>::max_ancestors_num(re,2);
  hashtable_gpu<byte,byte> hash(3,5,5,5,2);
  char* result=split<byte>::cut2ancestors(re,(int)max[0],(int)max[2]+1,2);
- printf("ok");
- printf("c::%c \n",*result);
  hash.Predo(result,(int)max[2]+1);
  free(re->data);
  free(re);

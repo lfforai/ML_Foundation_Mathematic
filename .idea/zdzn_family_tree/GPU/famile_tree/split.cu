@@ -343,14 +343,14 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
            CUDACHECK(cudaFree(p_mark[i]));
        }
 
-       int j=0;
-       while(*(result+j*max_an_len)!='&'){
-//    	   if(*(result+j*max_an_len)=='\0')
-              printf("i=:%d,%s \n",j,result+j*max_an_len);
-              j++;
-        }
-       printf("i=:%d,%c \n",j,(char)*(result+j*max_an_len+1));
-       printf("max:=%d",max_an_len);
+//       int j=0;
+//       while(*(result+j*max_an_len)!='&'){
+////    	   if(*(result+j*max_an_len)=='\0')
+//              printf("i=:%d,%s \n",j,result+j*max_an_len);
+//              j++;
+//        }
+//       printf("i=:%d,%c \n",j,(char)*(result+j*max_an_len+1));
+//       printf("max:=%d",max_an_len);
        return result;
 }
 
