@@ -24,7 +24,7 @@ file_input::file_input() {
 
 //内存映射方式读取测点名录
 file_input::info* file_input::input(){
-	    string szFileName="/lf/tree/szwq1.txt";
+	    string szFileName="/lf/family_tree/szwq1.txt";
 	    int m_nFile = open(szFileName.c_str(),O_RDWR | O_APPEND | O_CREAT);
 	    if (m_nFile < 0)
 	    {   m_nFile = 0;

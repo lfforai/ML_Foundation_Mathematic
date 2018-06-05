@@ -56,9 +56,15 @@ int main(int argc, char **argv)
 //	 memcpy(re_temp,re->data,100);
 //	 printf("%s",re_temp);
  byte* max=split<byte>::max_ancestors_num(re,2);
-// hashtable_gpu<byte,byte> hash(3,5,5,5,2);
- split<byte>::cut2ancestors(re,(int)max[0],(int)max[1],2);
- delete re->data;
- delete re;
+ hashtable_gpu<byte,byte> hash(3,5,5,5,2);
+ char* result=split<byte>::cut2ancestors(re,(int)max[0],(int)max[2]+1,2);
+ hash.Predo(result,(int)max[2]+1);
+ free(re->data);
+ free(re);
  printf("start!");
+// char * int_i=(char *)malloc(8);
+// ((int*)int_i)[0]=78990;
+// ((int*)int_i)[1]=78991;
+// printf("%d \n",((int*)int_i)[0]);
+// printf("%d \n",((int*)int_i)[1]);
 }

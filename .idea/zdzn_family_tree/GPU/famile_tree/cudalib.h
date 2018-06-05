@@ -43,6 +43,6 @@ template <class T>
 __global__ void split_global(T* dum, char* info,long start,long length,int dimblock);
 
 template <class T>
-__global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* info,long start,long length,long* mark,int dimblock);
+__global__ void scut2ancestors(char* des,int max_an_len,int max_an_num,char* info,long start,long length,unsigned long long int* mark,int dimblock);
 
 #endif /* CUDALIB_H_ */

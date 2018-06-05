@@ -71,7 +71,8 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
     }
 
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
-     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+    if(deviceCount>0)
+     {cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
      ncclComm_t* comms=(ncclComm_t*)malloc(deviceCount*sizeof(ncclComm_t));
      //managing deviceCount devices
      int* devs=(int *)malloc(deviceCount*sizeof(int));
@@ -80,7 +81,6 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
     	  devs[i]=i;
     	  CUDACHECK(cudaStreamCreate(s+i));
      }
-
      //initializing NCCL
      NCCLCHECK(ncclCommInitAll(comms,deviceCount, devs));
      //calling NCCL communication API. Group API is required when using
@@ -98,9 +98,10 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
       for(int i = 0; i <deviceCount; ++i)
           {ncclCommDestroy(comms[i]);
            CUDACHECK(cudaStreamDestroy(s[i]));}
+     }
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
 
-      s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+      cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
       for(int i=0;i<deviceCount;i++){
      	  CUDACHECK(cudaSetDevice(i));
      	  CUDACHECK(cudaStreamCreate(s+i));
@@ -156,8 +157,16 @@ T* split<T>::max_ancestors_num(file_input::info* info_of_key,int GPU_num){
 //        	     printf("max[0]=%d,max[1]=%d,i:=%d,j:=%d \n",(int)h_num[i][j*2],(int)h_num[i][j*2+1],i,j);
           }
       }
-
+      max[2]=max[2]+1;//程序有问题统计出来最大值少1？
+      max[1]=max[1]+1;//
       printf("%d,%d,%d \n",max[0],max[1],max[2]);
+
+      for (int i = 0;i < deviceCount;i++)
+      {
+//        CUDACHECK(cudaSetDevice(i));
+          CUDACHECK(cudaFree(d_info[i]));
+          CUDACHECK(cudaFree(d_num[i]));
+      }
       return max;
 };
 
@@ -171,8 +180,6 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
     long buffer_size=info_of_key->total_size;//字节数
 	int dimGrid_N=224;
 	int dimBlock_N=256;
-
-
 
 	int deviceCount=2;
 	if (GPU_num==-1)
@@ -202,15 +209,17 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
        }
        else
        {h_len_result[0]=0;}
+       printf(" h_len_result[i]:=%d \n",h_len_result[i]);
     }
+
     //-------------------------切割结束----------------------------
 
     for(int i=0;i<2;i++)
     {cudaOccupancyMaxPotentialBlockSize(
 		&dimGrid_N,
 		&dimBlock_N,
-		(void*)split_global<T>,
-		sizeof(T),
+		(void*)scut2ancestors<T>,
+		max_an_num*dimBlock_N*sizeof(T),
 		2048);
         printf("第%d次：dimGrid_N=:%d,dimBlock_N:=%d \n",i,dimGrid_N,dimBlock_N);
     }
@@ -227,7 +236,8 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
     }
 
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
-     cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+    if(deviceCount>0)
+    { cudaStream_t* s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
      ncclComm_t* comms=(ncclComm_t*)malloc(deviceCount*sizeof(ncclComm_t));
      //managing deviceCount devices
      int* devs=(int *)malloc(deviceCount*sizeof(int));
@@ -254,18 +264,20 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
      for(int i = 0; i <deviceCount; ++i)
           {ncclCommDestroy(comms[i]);
            CUDACHECK(cudaStreamDestroy(s[i]));}
+    }
 //把 d_info[0]通过nccl的boadcast到d_info[i]上去--------------------开始
 
-     s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
+        cudaStream_t*  s = (cudaStream_t*)malloc(sizeof(cudaStream_t)*deviceCount);
         for(int i=0;i<deviceCount;i++){
        	  CUDACHECK(cudaSetDevice(i));
        	  CUDACHECK(cudaStreamCreate(s+i));
         }
 
         //记录当前记录存放位置的变量
-        long** p_mark=(long** )malloc(deviceCount*sizeof(long*));
+        unsigned long long int ** p_mark=(unsigned long long int ** )malloc(deviceCount*sizeof(unsigned long long int *));
         for(int i=0;i<deviceCount;i++){
-           CUDACHECK(cudaMalloc(p_mark+i,sizeof(long)));
+           CUDACHECK(cudaSetDevice(i));
+           CUDACHECK(cudaMalloc(p_mark+i,sizeof(unsigned long long int)));
         }
 
 
@@ -277,11 +289,12 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
             }
             else
             { if(i==deviceCount-1)
-              scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],(deviceCount-1)*sub_length,sub_length+yu,p_mark[i],dimBlock_N);
+              scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],i*sub_length,sub_length+yu,p_mark[i],dimBlock_N);
               else
               scut2ancestors<T><<<dimGrid_N, dimBlock_N,max_an_num*dimBlock_N*sizeof(T),s[i]>>>(d_result[i]+h_len_result[i]*max_an_len*max_an_num,max_an_len,max_an_num,d_info[i],i*sub_length,sub_length,p_mark[i],dimBlock_N);
             }
         }
+
 
         for (int i = 0;i < deviceCount;i++)
           {
@@ -290,19 +303,55 @@ char* split<T>::cut2ancestors(file_input::info* info_of_key,int max_an_num,int m
           }
 
 
+        unsigned long long int** h_mark=(unsigned long long int**)malloc(sizeof(unsigned long long int *));
+        for(int i=0;i<deviceCount;i++){
+                h_mark[i]=(unsigned long long int*)malloc(sizeof(unsigned long long int));
+         }
+        for (int i = 0;i < deviceCount;i++)
+             {
+                 CUDACHECK(cudaSetDevice(i));
+                 CUDACHECK(cudaMemcpyAsync(h_mark[i],p_mark[i],sizeof(unsigned long long int), cudaMemcpyDeviceToHost,s[i]));
+             }
+
         for (int i = 0;i < deviceCount;i++)
         {
             CUDACHECK(cudaSetDevice(i));
             CUDACHECK(cudaStreamSynchronize(s[i]));
         }
 
-        for(int i = 0; i <deviceCount; ++i)
-             {CUDACHECK(cudaStreamDestroy(s[i]));}
+        unsigned long long int total=0;
+        for(int i = 0; i <deviceCount;i++)
+             {CUDACHECK(cudaStreamDestroy(s[i]));
+              total=total+*h_mark[i];
+              printf("%dl  \n",*h_mark[i]);
+             }
+        printf("%dl  \n",total);
+        char* result=(char *)malloc(total*max_an_len*sizeof(char));
 
-        for(int i = 0; i <deviceCount; ++i)
-        {
-        	printf("s% \n",h_result[i]);
-        }
+        total=0;
+        for(int i = 0; i<deviceCount;i++)
+         {  memcpy(result+total*max_an_len,h_result[i]+h_len_result[i]*max_an_len*max_an_num,*h_mark[i]*max_an_len*sizeof(char));
+        	total=total+*h_mark[i];
+         }
+
+       memset(result+total*max_an_len,'&',max_an_len);
+
+       for (int i = 0;i < deviceCount;i++)
+       {
+           CUDACHECK(cudaFree(d_info[i]));
+           CUDACHECK(cudaFree(d_result[i]));
+           CUDACHECK(cudaFree(p_mark[i]));
+       }
+
+//       int j=0;
+//       while(*(result+j*max_an_len)!='&'){
+////    	   if(*(result+j*max_an_len)=='\0')
+//              printf("i=:%d,%s \n",j,result+j*max_an_len);
+//              j++;
+//        }
+//       printf("i=:%d,%c \n",j,(char)*(result+j*max_an_len+1));
+//       printf("max:=%d",max_an_len);
+       return result;
 }
 
 template class split<byte>;

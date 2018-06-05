@@ -24,7 +24,7 @@ public:
 				int Ld_init;//用于在init时候初始化桶所属gpu和层次
 				int first_Ld;//该桶首次出现的深度（不变的）
 				int gpu_index;//在多GPU下每个桶属于第gpu_index的gpu
-				int is_reliable=0;//默认为虚桶
+				int is_reliable;//默认为虚桶
 				int mark;//桶中存放的数据量
         };
 
@@ -34,7 +34,7 @@ public:
 		  int Gd;//当前（初始化）全局深度
 	      int bucketNum_init;//当前（初始化）桶的数量
 
-	      int Gd_max;
+	      int Gd_max;//最大全局深度
 	      int bucketNum_max;//最大桶的数量
 
 	      int e_key_len;//每个桶key长度
@@ -43,11 +43,10 @@ public:
 		  int b;//每个桶可以存放的数据总量
 		};
 
-
 	extendiblehashtable extendiblehashtable_N;
 	hashtable_gpu(int Gd,int Gd_max,int e_key_len,int e_value_len,int GPU);
 	void Recursion_Ld(bucket* bucketList,int i);
-	void Predo();
+	void Predo(char* input,int max_an_len);
 	virtual ~hashtable_gpu();
 };
 
