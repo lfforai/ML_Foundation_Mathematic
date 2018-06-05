@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="lib64">
+    <CLASSES />
+    <JAVADOC />
+    <NATIVE>
+      <root url="file:///usr/local/cuda-9.0/lib64" />
+    </NATIVE>
+    <SOURCES />
+  </library>
+</component>
