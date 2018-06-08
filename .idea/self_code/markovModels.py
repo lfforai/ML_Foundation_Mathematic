@@ -67,6 +67,16 @@ def P_fun(a=tf.zeros(10),s=tf.zeros(10),f=np.zeros((10,10)),p=np.array([[1,1,0.5
               result.append(temp_matrix)
     return f,result
 
+#迭代计算最优结果,f是策略函数集合，p_matrix_list转移矩阵list,v报酬函数
+def max_find(f,p_matrix_list,v):
+    s_num=f[0].shape[0]
+    s_temp=np.zeros(s_num)
+    for i in range(s_num):
+        s_temp
+    v=tf.reshape(tf.slice(tf.gather(tf.cast(r,dtype=tf.float32),[0,2]),[0,2],[2,1]),[-1])
+
+    print(s_num)
+
 #（状态，收益）矩阵
 #状态向量
 s=tf.constant([1,2]);
@@ -82,7 +92,6 @@ f=active_road(a)
 
 p=tf.constant([[1,1,0.5,0.5],[1,2,0.4,0.6],[2,1,0.8,0.2],[2,2,0.7,0.3]])
 
-
 #收益报酬[1,1,6]表示i=1,a=1,状态在1,策略为1下的收益为6
 r=tf.constant([[1,1,6],[1,2,4],[2,1,-3],[2,2,-5]])
 
@@ -90,8 +99,24 @@ r=tf.constant([[1,1,6],[1,2,4],[2,1,-3],[2,2,-5]])
 
 #第一次迭代，取方案
 #迭代求解方程最优解法
-f,p_matrix=P_fun(a,s,f)
-print(p_matrix)
-with tf.Session() as sess:
-     f_len=f.shape[0]
+f,p_matrix_list=P_fun(a,s,f)
+max_find(f,p_matrix_list,r)
 
+
+with tf.Session() as sess:
+     pass
+
+      # print("---------------------------------")
+      # v=tf.reshape(tf.slice(tf.gather(tf.cast(r,dtype=tf.float32),[0,2]),[0,2],[2,1]),[-1])
+      # p=tf.convert_to_tensor(tf.cast(p_matrix_list[0],dtype=tf.float32))
+      # I=tf.eye(2)
+      # result=tf.reduce_sum(tf.multiply(tf.matrix_inverse(I-0.9*p),v),axis=1)
+      # print(sess.run(result))
+
+
+      #print(sess.run(tf.reduce_sum(tf.multiply(tf.matrix_inverse(tf.subtract(tf.eye(2,dtype=tf.float32),0.9*tf.convert_to_tensor(tf.cast(p_matrix_list[1],dtype=tf.float32)))),,axis=1)))
+
+
+
+      # c = tf.matmul(a, b)
+      # print(sess.run(c))
