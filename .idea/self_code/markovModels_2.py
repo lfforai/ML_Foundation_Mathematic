@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-
+#书《马尔科夫决策过程理论与应用》56页，例3.2,利用策略迭代算法求解最优值
 #基础数据
 #[1,1,0.5,0.5,6]=【状态，策略，转移到1，转移到2，报酬函数】
 base_data=tf.constant([[1,1,0.5,0.5,6],[1,2,0.8,0.2,4],[2,1,0.4,0.6,-3],[2,2,0.7,0.3,-5]])
@@ -110,7 +110,7 @@ def active_road(active_vector=tf.zeros([4,4])):
 
 print("test_active_road:=",active_road(active_vector=np.array([[1,2],[1,2]])))
 
-#开始结束
+#1、策略迭代算法求解最优值
 def max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num):
     f=active_road(a)
     #f=[1,1]
@@ -175,3 +175,6 @@ def max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num):
     return f_now,v_now
 
 print("max_find_3_1:=",max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num))
+
+
+#2、策略迭代算法求解最优值
