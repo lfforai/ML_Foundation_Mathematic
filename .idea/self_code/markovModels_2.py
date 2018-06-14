@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+
 #书《马尔科夫决策过程理论与应用》56页，例3.2,利用策略迭代算法求解最优值
 #基础数据
 #[1,1,0.5,0.5,6]=【状态，策略，转移到1，转移到2，报酬函数】
@@ -16,7 +17,7 @@ def b2P_each(base_date=base_data,a_num=a_num,a_index=2,s_i=1,s_j=1):
     tf.get_default_graph()
     index_s=tf.reduce_sum(tf.slice(a_num,[0],[s_i-1]),axis=0)#状态s块的
     with tf.Session() as sess:
-        result=sess.run(base_data[index_s+a_index-1][1+s_j])
+         result=sess.run(base_data[index_s+a_index-1][1+s_j])
     return result
 
 #生成概率矩阵
@@ -110,7 +111,7 @@ def active_road(active_vector=tf.zeros([4,4])):
 
 print("test_active_road:=",active_road(active_vector=np.array([[1,2],[1,2]])))
 
-#1、策略迭代算法求解最优值
+#1、策略迭代算法求解最优值（正常收敛）
 def max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num):
     f=active_road(a)
     #f=[1,1]
@@ -135,8 +136,8 @@ def max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num):
         v_now=[]
         with tf.Session() as sess:
             for i in range(s_len):
-                max_value=-1
-                max_action=-1
+                max_value=-10000
+                max_action=-10000
                 a_len=a[i].shape[0]#在第i个状态下的
                 for j in range(a_len):
                     # print("1:=",sess.run(tf.convert_to_tensor(b2P_vector(base_date=base_data,a_num=a_num,a_index=j+1,s_i=i+1))*v_tensor))
@@ -173,8 +174,62 @@ def max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num):
         else:
             f_pre,init_v_value=init_v(f=f_now,base_data=base_data,s=s,a=a,a_num=a_num)
     return f_now,v_now
-
 print("max_find_3_1:=",max_find_3_1(base_data=base_data,s=s,a=a,a_num=a_num))
 
+#2、策略迭代算法求解最优值(无法收敛=?为什么)
+def max_find_3_2(base_data=base_data,s=s,a=a,a_num=a_num):
+    tf.get_default_graph()
+    def init_v(f=[],base_data=base_data,s=s,a=a,a_num=a_num):
+        tf.get_default_graph()
+        f_num=f.__len__()
+        r=tf.reshape(tf.convert_to_tensor(b2r(base_date=base_data,fun=f)),[-1])
+        p=tf.convert_to_tensor(b2p(base_date=base_data,fun=f))
+        I=tf.eye(f_num)
+        init_op = tf.global_variables_initializer()
+        with tf.Session() as sess:
+            sess.run(init_op)
+            v=tf.reduce_sum(tf.multiply(tf.matrix_inverse(I-0.5*p),r),axis=1)
+            return np.array(sess.run(v))
+    v_n=init_v(f=[1,1],base_data=base_data,s=s,a=a,a_num=a_num)
+    #方案一
+    #v_n=np.ones(s.shape[0],dtype=float)   #方案二
 
-#2、策略迭代算法求解最优值
+    #最优迭代
+    def max_arg(v=[],base_data=base_data,s=s,a=a,a_num=a_num):
+        tf.get_default_graph()
+        s_len=v.__len__()#状态数
+        v=tf.convert_to_tensor(v,dtype=tf.float32)
+        f_now=[]
+        v_now=[]
+        with tf.Session() as sess:
+            for i in range(s_len):
+                max_value=-100000
+                max_action=-100000
+                a_len=a[i].shape[0]#在第i个状态下的
+                for j in range(a_len):
+                    temp=sess.run(tf.convert_to_tensor(b2r_each(base_date=base_data,s_len=s_len,s_i=i+1,a_i=j+1))+tf.reduce_sum(0.5*tf.convert_to_tensor(b2P_vector(base_date=base_data,a_num=a_num,a_index=j+1,s_i=i+1))*v))
+                    if temp>max_value:
+                       max_value=temp
+                       max_action=j+1
+                    else:
+                        pass
+                f_now.append(max_action)
+                v_now.append(max_value)
+        return np.array(f_now),np.array(v_now)
+    i=0
+    with tf.Session() as sess:
+        while(i<10000):
+            f_now,v_n_1=max_arg(v=v_n,base_data=base_data,s=s,a=a,a_num=a_num)
+            v_n_1_t=tf.convert_to_tensor(v_n_1)
+            print("-----------------------------",v_n_1,v_n)
+            if sess.run(tf.sqrt(tf.reduce_sum(tf.multiply((v_n-v_n_1_t),(v_n-v_n_1_t)))))<0.1*(1-0.5)/(2*0.5):
+               v_n=sess.run(v_n_1_t)
+               break
+            else:
+               v_n=v_n_1
+            i=i+1
+        f_now,v_n_1=max_arg(v=v_n,base_data=base_data,s=s,a=a,a_num=a_num)
+    return f_now,v_n_1
+print("max_find_3_2:=",max_find_3_2(base_data=base_data,s=s,a=a,a_num=a_num))
+
+
