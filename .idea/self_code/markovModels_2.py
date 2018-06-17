@@ -221,8 +221,12 @@ def max_find_3_2(base_data=base_data,s=s,a=a,a_num=a_num):
         while(i<10000):
             f_now,v_n_1=max_arg(v=v_n,base_data=base_data,s=s,a=a,a_num=a_num)
             v_n_1_t=tf.convert_to_tensor(v_n_1)
-            print("-----------------------------",v_n_1,v_n)
-            if sess.run(tf.sqrt(tf.reduce_sum(tf.multiply((v_n-v_n_1_t),(v_n-v_n_1_t)))))<0.1*(1-0.5)/(2*0.5):
+            v_n_t=tf.convert_to_tensor(v_n)
+            # print("-----------------------------",v_n_1,v_n)
+            print("---------------------------------------")
+            print(sess.run(tf.reduce_max(v_n_t-v_n_1_t)))
+            # if sess.run(tf.sqrt(tf.reduce_sum(tf.multiply((v_n-v_n_1_t),(v_n-v_n_1_t)))))<0.1*(1-0.5)/(2*0.5):
+            if sess.run(tf.reduce_max(v_n_t-v_n_1_t))<0.1*(1-0.5)/(2*0.5):
                v_n=sess.run(v_n_1_t)
                break
             else:
@@ -230,6 +234,6 @@ def max_find_3_2(base_data=base_data,s=s,a=a,a_num=a_num):
             i=i+1
         f_now,v_n_1=max_arg(v=v_n,base_data=base_data,s=s,a=a,a_num=a_num)
     return f_now,v_n_1
-print("max_find_3_2:=",max_find_3_2(base_data=base_data,s=s,a=a,a_num=a_num))
+# print("max_find_3_2:=",max_find_3_2(base_data=base_data,s=s,a=a,a_num=a_num))
 
 
