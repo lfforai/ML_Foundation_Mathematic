@@ -124,7 +124,7 @@ def att_cut2pitch(filenames=['D:\\baoxian\\01.csv', 'D:\\baoxian\\02.csv', 'D:\\
 #                               tf.constant([-3000.0,-200.0,0.0,50.0,150.0,500.0]), \
 #                               tf.constant(['A','B','C','D'])])
 att_cut2pitch(filenames=['D:\\baoxian\\01.csv', 'D:\\baoxian\\02.csv', 'D:\\baoxian\\03.csv'],
-              batch_size=2000,num_epochs=None,std_list=[tf.constant([0.0,25.0,50.0,100.0,200.0]), \
+              batch_size=200,num_epochs=None,std_list=[tf.constant([0.0,25.0,50.0,100.0,200.0]), \
                                          tf.constant([-1000000,0.0,1500,30000]), \
                                          tf.constant([-3000.0,-200.0,0.0,50.0,150.0,500.0]), \
                                          tf.constant([1.0,2.0,3.0,4.0])],arr_mark=[1,1,1,0])
