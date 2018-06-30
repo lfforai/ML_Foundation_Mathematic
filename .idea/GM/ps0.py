@@ -88,7 +88,7 @@ def Poisson(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
 def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
-    filenames=['/lf/data/baoxian/data.csv', '/lf/data/baoxian/data1.csv', '/lf/data/baoxian/data2.csv']
+    filenames=['data.csv', 'data1.csv', 'data2.csv']
     batch_size=10
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
@@ -201,19 +201,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ps_hosts",
         type=str,
-        default="",
+        default="localhost:2222,localhost:2223",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(
         "--worker_hosts",
         type=str,
-        default="",
+        default="localhost:2224,localhost:2225",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(
         "--job_name",
         type=str,
-        default="",
+        default="ps",
         help="One of 'ps', 'worker'"
     )
     # Flags for defining the tf.train.Server

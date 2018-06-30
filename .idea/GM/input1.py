@@ -70,10 +70,13 @@ def medie_tensor_list(std_list=[tf.constant([0.0,100.0,150.0,300.0]),tf.constant
     return result
 
 
-#tweedie分布拟合总赔款模型
-def tweedie_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
-    y_len=y.shape(0)
-    b=tf.variant()#
+#tweedie分布拟合总赔款模型 w是需要拟合的变量
+def tweedie_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0),varible=tf.constant(0),arr_len_sum=15,w=tf.constant(0)):
+    sampele_len=x.shape[0]#这pitch的样本数量
+    x_len=x.shape[1]#指标的个数
+    y_total_loss=tf.slice(y,[0,0],[-1,1])#确定y
+    tf.exp(tf.reduce_sum(tf.matmul(x,w)))
+    return loss
 
 #gamma分布拟合案均赔款模型
 def gamma_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
@@ -83,21 +86,31 @@ def gamma_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
 def Poisson(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
     pass
 
-
 #5、开始模型测算
 def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
-    filenames=['/lf/data/baoxian/data.csv', '/lf/data/baoxian/data1.csv', '/lf/data/baoxian/data2.csv']
+    filenames=['./data.csv', './data1.csv', './data2.csv']
     batch_size=10
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
               tf.constant([1.0,2.0,3.0,4.0])]
-    arr_mark=[0,0,0]
+
+    arr_mark=[0,0,0]#每个指标是否为需要离散化的指标
     if_constant=True;#是否需要常数项
 
-    #设置服务器
+    arr_len_sum=0#指标的总长度
+    for e in std_list:
+       arr_len_sum=arr_len_sum+e.shape[0]
+    if if_constant==True:
+       arr_len_sum=arr_len_sum+1#增加一个常数项
+
+    gama_mark=1;#拟合案均赔款
+    poisson_mark=1;#拟合出险次数
+    tweedie_mark=1;#拟合总赔款
+
+    #二、设置服务器
     ps_hosts = FLAGS.ps_hosts.split(",")
     worker_hosts = FLAGS.worker_hosts.split(",")
 
@@ -111,14 +124,6 @@ def main(_):
                              job_name=FLAGS.job_name,
                              task_index=FLAGS.task_index,config=config)
 
-    # with tf.Session() as sess:
-    #     x_onehot=tf.constant([[0.0,0.0],[0.0,0.0]])
-    #     def map_func_add_one(x=tf.constant(0.0)):
-    #         return tf.concat([tf.constant([1.0]),x],axis=0)
-    #     x_onehot=tf.map_fn(map_func_add_one,x_onehot)
-    #     print(sess.run(x_onehot))
-    #     exit()
-
     if FLAGS.job_name == "ps":
         server.join()
     elif FLAGS.job_name == "worker":
@@ -131,7 +136,7 @@ def main(_):
                 print("需要离散化的指标个数与离散化区间（std_list）个数不一致！")
                 exit()
 
-            #----------------------------开始指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
+            #----------------------------1、开始指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
             def map_func(x_func=tf.constant(1),std_list=std_list,arr_mark=[]):
                 temp=[]
                 for j in range(x_func.shape[0]):
@@ -169,9 +174,18 @@ def main(_):
                 x_onehot=tf.map_fn(map_func_add_one,x_onehot)
             else:
                 x_onehot=tf.map_fn(map_func_2,x)
-                #----------------------------结束指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
-                # The StopAtStepHook handles stopping after running given steps.
+            #----------------------------结束指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
 
+            #----------------------------2、拟合模型--------------------------------------------------------------------------
+            loss=tf.constant(0)
+            if  tweedie_mark==1:
+                w=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], dtype=tf.float32, initilizer=tf.random_normal([arr_len_sum]))
+                loss=tweedie_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0),varible=tf.constant(0),arr_len_sum=15,w=tf.constant(0))
+
+            #----------------------------2、结束拟合模型-----------------------------------------------------------------------
+
+
+            # The StopAtStepHook handles stopping after running given steps.
             hooks=[tf.train.StopAtStepHook(last_step=1000000)]
 
             # The MonitoredTrainingSession takes care of session initialization,
@@ -201,26 +215,26 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ps_hosts",
         type=str,
-        default="",
+        default="localhost:2222,localhost:2223",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(
         "--worker_hosts",
         type=str,
-        default="",
+        default="localhost:2224,localhost:2225",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(
         "--job_name",
         type=str,
-        default="",
+        default="worker",
         help="One of 'ps', 'worker'"
     )
     # Flags for defining the tf.train.Server
     parser.add_argument(
         "--task_index",
         type=int,
-        default=0,
+        default=1,
         help="Index of task within the job"
     )
     FLAGS, unparsed = parser.parse_known_args()
