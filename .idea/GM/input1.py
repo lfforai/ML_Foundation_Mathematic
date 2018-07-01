@@ -71,11 +71,14 @@ def medie_tensor_list(std_list=[tf.constant([0.0,100.0,150.0,300.0]),tf.constant
 
 
 #tweedie分布拟合总赔款模型 w是需要拟合的变量
-def tweedie_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0),varible=tf.constant(0),arr_len_sum=15,w=tf.constant(0)):
-    sampele_len=x.shape[0]#这pitch的样本数量
-    x_len=x.shape[1]#指标的个数
+def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
     y_total_loss=tf.slice(y,[0,0],[-1,1])#确定y
-    tf.exp(tf.reduce_sum(tf.matmul(x,w)))
+    # print("y_total_loss:=",y_total_loss)
+    #计算loss
+    u=tf.exp(tf.reduce_sum(tf.multiply(x,w)))
+    theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
+    K_theta=(-1.0)/(p-2.0)*tf.pow(((-(p-1.0))*theta),(p-2.0)/(p-1.0))
+    loss=tf.reduce_mean(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta))
     return loss
 
 #gamma分布拟合案均赔款模型
@@ -98,7 +101,8 @@ def main(_):
               tf.constant([1.0,2.0,3.0,4.0])]
 
     arr_mark=[0,0,0]#每个指标是否为需要离散化的指标
-    if_constant=True;#是否需要常数项
+    if_constant=True#是否需要常数项
+    learning_rate=0.01
 
     arr_len_sum=0#指标的总长度
     for e in std_list:
@@ -106,8 +110,8 @@ def main(_):
     if if_constant==True:
        arr_len_sum=arr_len_sum+1#增加一个常数项
 
-    gama_mark=1;#拟合案均赔款
-    poisson_mark=1;#拟合出险次数
+    gama_mark=0;#拟合案均赔款
+    poisson_mark=0;#拟合出险次数
     tweedie_mark=1;#拟合总赔款
 
     #二、设置服务器
@@ -179,8 +183,10 @@ def main(_):
             #----------------------------2、拟合模型--------------------------------------------------------------------------
             loss=tf.constant(0)
             if  tweedie_mark==1:
-                w=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], dtype=tf.float32, initilizer=tf.random_normal([arr_len_sum]))
-                loss=tweedie_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0),varible=tf.constant(0),arr_len_sum=15,w=tf.constant(0))
+                w=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+                loss=tweedie_model(y_batch,weight_batch,x_onehot,w,p=tf.constant(1.5))
+                optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(-1.0*loss)
+                accuracy=tf.reduce_mean(tf.abs(tf.exp(tf.reduce_sum(tf.multiply(x_onehot,w)))-tf.slice(y_batch,[0,0],[-1,1])))
 
             #----------------------------2、结束拟合模型-----------------------------------------------------------------------
 
@@ -201,10 +207,14 @@ def main(_):
                 coord = tf.train.Coordinator()#创建一个协调器，管理线程
                 threads = tf.train.start_queue_runners(sess=mon_sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
 
-                for i in  range(4):
-                    print("y:=",mon_sess.run(y_batch))
-                    print("x:=",mon_sess.run(x_onehot))
-                    print("weight:=",mon_sess.run(weight_batch))
+                for i in  range(40000):
+                    sess.run(optimizer)
+                    if  i%100==0:
+                        pass
+                        # print("accuracy:=",sess.run(accuracy))
+                    # print("y:=",mon_sess.run(y_batch))
+                    # print("x:=",mon_sess.run(x_onehot))
+                    # print("weight:=",mon_sess.run(weight_batch))
                 coord.request_stop()
                 coord.join(threads)
 
