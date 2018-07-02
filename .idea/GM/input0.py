@@ -4,6 +4,7 @@ import random as random
 import os
 import argparse
 import sys
+FLAGS = None
 #基于GLM的车联网保险数据定价模型
 
 #---------------------------------第一部分 GLM模型中需要数据预处理-------------------------------
@@ -70,8 +71,19 @@ def medie_tensor_list(std_list=[tf.constant([0.0,100.0,150.0,300.0]),tf.constant
     return result
 
 #tweedie分布拟合总赔款模型 w是需要拟合的变量
+#tweedie分布拟合总赔款模型 w是需要拟合的变量
 def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
+    y_total_loss=tf.reshape(tf.slice(y,[0,1],[-1,1]),[-1])#确定y
+    u=tf.exp(tf.reduce_sum(x*w,axis=1))
+    theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
+    K_theta=(-1.0)/(p-2.0)*tf.pow(((-(p-1.0))*theta),(p-2.0)/(p-1.0))
+    loss=tf.reduce_mean(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta),axis=0)
+    return loss
+
+#gamma分布拟合案均赔款模型
+def gamma_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
     y_total_loss=tf.slice(y,[0,0],[-1,1])#确定y
+    # print("y_total_loss:=",y_total_loss)
     #计算loss
     u=tf.exp(tf.reduce_sum(tf.multiply(x,w)))
     theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
@@ -79,21 +91,19 @@ def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
     loss=tf.reduce_mean(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta))
     return loss
 
-#gamma分布拟合案均赔款模型
-def gamma_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
-    pass
-
 #Poisson拟合索赔次数
-def Poisson(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
-    pass
-
+def Poisson_model(y,weight,x,w):
+    y_total_time=tf.reshape(tf.slice(y,[0,2],[-1,1]),[-1])#确定y
+    u=tf.exp(tf.reduce_sum(tf.multiply(x,w),axis=1))
+    loss=tf.reduce_mean(tf.multiply(tf.multiply(tf.log(u),y_total_time)-u,weight),axis=0)
+    return loss
 
 #5、开始模型测算
 def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
     filenames=['./data.csv', './data1.csv', './data2.csv']
-    batch_size=10
+    batch_size=50
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
@@ -180,42 +190,42 @@ def main(_):
             #----------------------------结束指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
 
             #----------------------------2、拟合模型--------------------------------------------------------------------------
-            loss=tf.constant(0)
-            if  tweedie_mark==1:
-                w=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
-                loss=tweedie_model(y_batch,weight_batch,x_onehot,w,p=tf.constant(1.5))
-                optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(-1.0*loss)
-                accuracy=tf.reduce_mean(tf.abs(tf.exp(tf.reduce_sum(tf.multiply(x_onehot,w)))-tf.slice(y_batch,[0,0],[-1,1])))
-
-            #----------------------------2、结束拟合模型-----------------------------------------------------------------------
-
+            hooks=[tf.train.StopAtStepHook(last_step=1000000)]
+            global_step = tf.train.get_or_create_global_step()
 
             # The StopAtStepHook handles stopping after running given steps.
-            hooks=[tf.train.StopAtStepHook(last_step=1000000)]
+            w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+            loss_tweedie=(-1.0)*tweedie_model(y_batch,weight_batch,x_onehot,w_tweedie,p=tf.constant(1.5))
+            optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
+            accuracy_tweedie=tf.sqrt(tf.reduce_mean(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_tweedie),axis=1))-tf.reshape(tf.slice(y_batch,[0,1],[-1,1]),[-1]),2)))
 
-            # The MonitoredTrainingSession takes care of session initialization,
-            # restoring from a checkpoint, saving to a checkpoint, and closing when done
-            # or an error occurs.
-            global_step = tf.Variable(0, name='global_step', trainable=False)
+            w_poisson=tf.get_variable(name='poisson_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+            loss_poisson=(-1.0)*Poisson_model(y_batch,weight_batch,x_onehot,w_poisson)
+            optimizer_poisson=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_poisson,global_step=global_step)
+            accuracy_poisson=tf.sqrt(tf.reduce_mean(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot,w_poisson),axis=1))-tf.reshape(tf.slice(y_batch,[0,2],[-1,1]),[-1]),2)))
+            #----------------------------2、结束拟合模型-----------------------------------------------------------------------
+
+            # The StopAtStepHook handles stopping after running given steps.
             init = tf.global_variables_initializer()
             with tf.train.MonitoredTrainingSession(master=server.target,
                                                    is_chief=(FLAGS.task_index == 0),
-                                                   checkpoint_dir="/tmp/train_logs",
-                                                   hooks=hooks) as mon_sess:
-                mon_sess.run(init)
-                coord = tf.train.Coordinator()#创建一个协调器，管理线程
-                threads = tf.train.start_queue_runners(sess=mon_sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
+                                                   checkpoint_dir="c:/baoxian/",
+                                                   hooks=hooks) as sess:
+                sess.run(init)
+                while not sess.should_stop():
+                    coord = tf.train.Coordinator()#创建一个协调器，管理线程
+                    threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
+                    for i in  range(100000):
+                        if tweedie_mark==1:
+                            sess.run(optimizer_tweedie)
+                        if poisson_mark==1:
+                            sess.run(optimizer_poisson)
 
-                for i in  range(40000):
-                    sess.run(optimizer)
-                    if  i%100==0:
-                        pass
-                        # print("accuracy:=",sess.run(accuracy))
-                    # print("y:=",mon_sess.run(y_batch))
-                    # print("x:=",mon_sess.run(x_onehot))
-                    # print("weight:=",mon_sess.run(weight_batch))
-                coord.request_stop()
-                coord.join(threads)
+                        if  i%100==0:
+                            if tweedie_mark==1:
+                                print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
+                            if poisson_mark==1:
+                                print("accuracy_poisson_:=",sess.run(accuracy_poisson))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -230,7 +240,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--worker_hosts",
         type=str,
-        default="localhost:2224,localhost:2225",
+        default="localhost:2224,localhost:2225,localhost:2226",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(

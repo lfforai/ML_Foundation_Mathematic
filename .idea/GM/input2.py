@@ -4,6 +4,7 @@ import random as random
 import os
 import argparse
 import sys
+FLAGS = None
 #基于GLM的车联网保险数据定价模型
 
 #---------------------------------第一部分 GLM模型中需要数据预处理-------------------------------
@@ -71,8 +72,8 @@ def medie_tensor_list(std_list=[tf.constant([0.0,100.0,150.0,300.0]),tf.constant
 
 #tweedie分布拟合总赔款模型 w是需要拟合的变量
 def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
-    y_total_loss=tf.slice(y,[0,0],[-1,1])#确定y
-    u=tf.exp(tf.reduce_sum(tf.multiply(x,w)))
+    y_total_loss=tf.reshape(tf.slice(y,[0,1],[-1,1]),[-1])#确定y
+    u=tf.exp(tf.reduce_sum(x*w,axis=1))
     theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
     K_theta=(-1.0)/(p-2.0)*tf.pow(((-(p-1.0))*theta),(p-2.0)/(p-1.0))
     loss=tf.reduce_mean(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta),axis=0)
@@ -91,8 +92,8 @@ def gamma_model(y=tf.constant(0),weight=tf.constant(0),x=tf.constant(0)):
 
 #Poisson拟合索赔次数
 def Poisson_model(y,weight,x,w):
-    y_total_time=tf.slice(y,[0,2],[-1,1])#确定y
-    u=tf.exp(tf.reduce_sum(tf.multiply(x,w)))
+    y_total_time=tf.reshape(tf.slice(y,[0,2],[-1,1]),[-1])#确定y
+    u=tf.exp(tf.reduce_sum(tf.multiply(x,w),axis=1))
     loss=tf.reduce_mean(tf.multiply(tf.multiply(tf.log(u),y_total_time)-u,weight),axis=0)
     return loss
 
@@ -113,9 +114,9 @@ def main(_):
 
     arr_len_sum=0#指标的总长度
     for e in std_list:
-        arr_len_sum=arr_len_sum+e.shape[0]
+       arr_len_sum=arr_len_sum+e.shape[0]
     if if_constant==True:
-        arr_len_sum=arr_len_sum+1#增加一个常数项
+       arr_len_sum=arr_len_sum+1#增加一个常数项
 
     gama_mark=0;#拟合案均赔款
     poisson_mark=0;#拟合出险次数
@@ -189,41 +190,42 @@ def main(_):
 
             #----------------------------2、拟合模型--------------------------------------------------------------------------
             hooks=[tf.train.StopAtStepHook(last_step=1000000)]
-            global_step = tf.contrib.framework.get_or_create_global_step()
+            global_step = tf.train.get_or_create_global_step()
 
             # The StopAtStepHook handles stopping after running given steps.
             w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
             loss_tweedie=(-1.0)*tweedie_model(y_batch,weight_batch,x_onehot,w_tweedie,p=tf.constant(1.5))
             optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
-            accuracy_tweedie=tf.sqrt(tf.reduce_mean(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_tweedie)))-tf.slice(y_batch,[0,0],[-1,1]),2)))
+            accuracy_tweedie=tf.sqrt(tf.reduce_mean(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_tweedie),axis=1))-tf.reshape(tf.slice(y_batch,[0,1],[-1,1]),[-1]),2)))
 
             w_poisson=tf.get_variable(name='poisson_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
             loss_poisson=(-1.0)*Poisson_model(y_batch,weight_batch,x_onehot,w_poisson)
             optimizer_poisson=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_poisson,global_step=global_step)
-            accuracy_poisson=tf.sqrt(tf.reduce_mean(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot,w_poisson)))-tf.slice(y_batch,[0,2],[-1,1]),2)))
+            accuracy_poisson=tf.sqrt(tf.reduce_mean(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot,w_poisson),axis=1))-tf.reshape(tf.slice(y_batch,[0,2],[-1,1]),[-1]),2)))
             #----------------------------2、结束拟合模型-----------------------------------------------------------------------
 
-
-            # The StopAtStepHook handles stopping after running given steps.
             init = tf.global_variables_initializer()
+            # The StopAtStepHook handles stopping after running given steps.
             with tf.train.MonitoredTrainingSession(master=server.target,
                                                    is_chief=(FLAGS.task_index == 0),
                                                    checkpoint_dir="c:/baoxian/",
-                                                   hooks=hooks) as mon_sess:
-                mon_sess.run(init)
-                while not mon_sess.should_stop():
+                                                   hooks=hooks) as sess:
+                sess.run(init)
+                while not sess.should_stop():
                     coord = tf.train.Coordinator()#创建一个协调器，管理线程
                     threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
-                    for i in  range(40000):
+                    for i in  range(100000):
                         if tweedie_mark==1:
                             sess.run(optimizer_tweedie)
                         if poisson_mark==1:
                             sess.run(optimizer_poisson)
+
                         if  i%100==0:
                             if tweedie_mark==1:
                                 print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
                             if poisson_mark==1:
                                 print("accuracy_poisson_:=",sess.run(accuracy_poisson))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -244,14 +246,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--job_name",
         type=str,
-        default="ps",
+        default="worker",
         help="One of 'ps', 'worker'"
     )
     # Flags for defining the tf.train.Server
     parser.add_argument(
         "--task_index",
         type=int,
-        default=1,
+        default=2,
         help="Index of task within the job"
     )
     FLAGS, unparsed = parser.parse_known_args()
