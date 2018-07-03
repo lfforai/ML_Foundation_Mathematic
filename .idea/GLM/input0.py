@@ -102,10 +102,8 @@ def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
     filenames=['./data.csv', './data1.csv', './data2.csv']
-    batch_size=50
+    batch_size=100
     num_epochs=None
-
-    #每个指标的离散化分段标准，当arr_mark为1时候需要离散化，当为0时候已经是离散化了
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
               tf.constant([1.0,2.0,3.0,4.0])]
@@ -117,9 +115,9 @@ def main(_):
     arr_len_sum=0#指标的总长度
     for e in range(std_list.__len__()):
         if arr_mark[e]==0:
-           arr_len_sum=arr_len_sum+std_list[e].shape[0]#当不需要离散化时候，分段标准长度=指标长度
+            arr_len_sum=arr_len_sum+std_list[e].shape[0]#当不需要离散化时候，分段标准长度=指标长度
         else:
-           arr_len_sum=arr_len_sum+std_list[e].shape[0]-1#当需要离散化时候，指标长度=分段标准长度-1
+            arr_len_sum=arr_len_sum+std_list[e].shape[0]-1#当需要离散化时候，指标长度=分段标准长度-1
     if if_constant==True:
         arr_len_sum=arr_len_sum+1#增加一个常数项
 
@@ -134,9 +132,9 @@ def main(_):
     # Create a cluster from the parameter server and worker hosts.
     cluster = tf.train.ClusterSpec({"ps": ps_hosts, "worker": worker_hosts})
 
+
     config = tf.ConfigProto()
     config.gpu_options.allow_growth=True
-    # Create and start a server for the local task.
     server = tf.train.Server(cluster,
                              job_name=FLAGS.job_name,
                              task_index=FLAGS.task_index,config=config)
@@ -146,9 +144,10 @@ def main(_):
     elif FLAGS.job_name == "worker":
         # # Assigns ops to the local worker by default.
         with tf.device(tf.train.replica_device_setter(
-                worker_device="/job:worker/task:%d" %FLAGS.task_index,
+                worker_device="/job:worker/task:%d/gpu:0" %FLAGS.task_index,
                 cluster=cluster)):
-            y_batch,weight_batch,x_batch=input_pipeline(filenames, batch_size=batch_size, num_epochs=num_epochs)
+            with tf.device('/cpu:0'):
+                 y_batch,weight_batch,x_batch=input_pipeline(filenames, batch_size=batch_size, num_epochs=num_epochs)
             if std_list.__len__()!=x_batch.shape[1]:
                 print("需要离散化的指标个数与离散化区间（std_list）个数不一致！")
                 exit()
@@ -163,7 +162,8 @@ def main(_):
             #把离散化指标转化为GLM模型的[1,0,0]这类格式
             #比如指标[A,B,C],[A:1,0,0][B:0,1,0][C:0,0,1],arr_mark:1表示它是连续区间需要切割区间：0表示本身就是离散变量不用切割区间
             #把分段区间标准化
-            x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
+            with tf.device('/cpu:0'):
+                x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
 
             #把每一个指标的每个指标，转换为标准的【0，1】
             def map_func_2(x_n=tf.constant([1.25,1.575,2.50,3.00])):
@@ -181,16 +181,18 @@ def main(_):
                     result=tf.concat(result,axis=0)
                     return result
                 return map_func_e(x=x_n,std_list=x_std)
-
-            x=tf.map_fn(lambda x:map_func(x_func=x,std_list=std_list,arr_mark=arr_mark),x_batch)
+            with tf.device('/cpu:0'):
+                x=tf.map_fn(lambda x:map_func(x_func=x,std_list=std_list,arr_mark=arr_mark),x_batch)
 
             if if_constant==True:#在指标中添加一个常数项b0
                 x_onehot=tf.map_fn(map_func_2,x)
                 def map_func_add_one(x=tf.constant(0)):
                     return tf.concat([tf.constant([1.0]),x],axis=0)
-                x_onehot=tf.map_fn(map_func_add_one,x_onehot)
+                with tf.device('/cpu:0'):
+                    x_onehot=tf.map_fn(map_func_add_one,x_onehot)
             else:
-                x_onehot=tf.map_fn(map_func_2,x)
+                with tf.device('/cpu:0'):
+                    x_onehot=tf.map_fn(map_func_2,x)
             #----------------------------结束指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
 
             #----------------------------2、拟合模型--------------------------------------------------------------------------
@@ -215,30 +217,32 @@ def main(_):
             #----------------------------2、结束拟合模型-----------------------------------------------------------------------
 
             init = tf.global_variables_initializer()
-            # The StopAtStepHook handles stopping after running given steps.
-            with tf.train.MonitoredTrainingSession(master=server.target,
-                                                   is_chief=(FLAGS.task_index == 0),
-                                                   checkpoint_dir="/temp/lf",
-                                                   hooks=hooks) as sess:
-                sess.run(init)
-                while not sess.should_stop():
-                    coord = tf.train.Coordinator()#创建一个协调器，管理线程
-                    threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
-                    for i in  range(100000):
-                        if tweedie_mark==1:
-                            sess.run(optimizer_tweedie)
-                        if poisson_mark==1:
-                            sess.run(optimizer_poisson)
-                        if gamma_mark==1:
-                            sess.run(optimizer_gamma)
-
-                        if  i%100==0:
+            with tf.device('/cpu:0'):
+                # The StopAtStepHook handles stopping after running given steps.
+                with tf.train.MonitoredTrainingSession(master=server.target,
+                                                       is_chief=(FLAGS.task_index == 0),
+                                                       checkpoint_dir="/temp/lf",
+                                                       hooks=hooks) as sess:
+                    sess.run(init)
+                    while not sess.should_stop():
+                        coord = tf.train.Coordinator()#创建一个协调器，管理线程
+                        threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
+                        for i in  range(100000):
                             if tweedie_mark==1:
-                                print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
+                                sess.run(optimizer_tweedie)
                             if poisson_mark==1:
-                                print("accuracy_poisson_:=",sess.run(accuracy_poisson))
+                                sess.run(optimizer_poisson)
                             if gamma_mark==1:
-                                print("accuracy_gamma_:=",sess.run(accuracy_gamma))
+                                sess.run(optimizer_gamma)
+
+                            if  i%100==0:
+                                if tweedie_mark==1:
+                                    print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
+                                if poisson_mark==1:
+                                    print("accuracy_poisson_:=",sess.run(accuracy_poisson))
+                                if gamma_mark==1:
+                                    print("accuracy_gamma_:=",sess.run(accuracy_gamma))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -253,7 +257,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--worker_hosts",
         type=str,
-        default="localhost:2224,localhost:2225,localhost:2226",
+        default="localhost:2224,localhost:2225,localhost:2226,localhost:2227",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(

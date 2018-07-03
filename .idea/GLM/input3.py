@@ -144,8 +144,9 @@ def main(_):
     elif FLAGS.job_name == "worker":
         # # Assigns ops to the local worker by default.
         with tf.device(tf.train.replica_device_setter(
-                worker_device="/job:worker/task:%d/gpu:0" %FLAGS.task_index,
+                worker_device="/job:worker/task:%d/gpu:1" %FLAGS.task_index,
                 cluster=cluster)):
+
             with tf.device('/cpu:0'):
                  y_batch,weight_batch,x_batch=input_pipeline(filenames, batch_size=batch_size, num_epochs=num_epochs)
             if std_list.__len__()!=x_batch.shape[1]:
@@ -163,7 +164,7 @@ def main(_):
             #比如指标[A,B,C],[A:1,0,0][B:0,1,0][C:0,0,1],arr_mark:1表示它是连续区间需要切割区间：0表示本身就是离散变量不用切割区间
             #把分段区间标准化
             with tf.device('/cpu:0'):
-                x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
+                 x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
 
             #把每一个指标的每个指标，转换为标准的【0，1】
             def map_func_2(x_n=tf.constant([1.25,1.575,2.50,3.00])):
@@ -182,17 +183,17 @@ def main(_):
                     return result
                 return map_func_e(x=x_n,std_list=x_std)
             with tf.device('/cpu:0'):
-                x=tf.map_fn(lambda x:map_func(x_func=x,std_list=std_list,arr_mark=arr_mark),x_batch)
+                 x=tf.map_fn(lambda x:map_func(x_func=x,std_list=std_list,arr_mark=arr_mark),x_batch)
 
             if if_constant==True:#在指标中添加一个常数项b0
                 x_onehot=tf.map_fn(map_func_2,x)
                 def map_func_add_one(x=tf.constant(0)):
                     return tf.concat([tf.constant([1.0]),x],axis=0)
                 with tf.device('/cpu:0'):
-                    x_onehot=tf.map_fn(map_func_add_one,x_onehot)
+                     x_onehot=tf.map_fn(map_func_add_one,x_onehot)
             else:
                 with tf.device('/cpu:0'):
-                    x_onehot=tf.map_fn(map_func_2,x)
+                     x_onehot=tf.map_fn(map_func_2,x)
             #----------------------------结束指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
 
             #----------------------------2、拟合模型--------------------------------------------------------------------------
@@ -223,7 +224,7 @@ def main(_):
                                                        is_chief=(FLAGS.task_index == 0),
                                                        checkpoint_dir="/temp/lf",
                                                        hooks=hooks) as sess:
-                    sess.run(init)
+                    # sess.run(init)
                     while not sess.should_stop():
                         coord = tf.train.Coordinator()#创建一个协调器，管理线程
                         threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
@@ -242,7 +243,6 @@ def main(_):
                                     print("accuracy_poisson_:=",sess.run(accuracy_poisson))
                                 if gamma_mark==1:
                                     print("accuracy_gamma_:=",sess.run(accuracy_gamma))
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task_index",
         type=int,
-        default=1,
+        default=3,
         help="Index of task within the job"
     )
     FLAGS, unparsed = parser.parse_known_args()
