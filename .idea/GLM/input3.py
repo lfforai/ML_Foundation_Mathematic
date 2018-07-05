@@ -224,11 +224,11 @@ def main(_):
                                                        is_chief=(FLAGS.task_index == 0),
                                                        checkpoint_dir="/temp/lf",
                                                        hooks=hooks) as sess:
-                    # sess.run(init)
+                    sess.run(init)
+                    coord = tf.train.Coordinator()#创建一个协调器，管理线程
+                    threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
                     while not sess.should_stop():
-                        coord = tf.train.Coordinator()#创建一个协调器，管理线程
-                        threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
-                        for i in  range(100000):
+                        for i in  range(10000):
                             if tweedie_mark==1:
                                 sess.run(optimizer_tweedie)
                             if poisson_mark==1:
@@ -243,6 +243,8 @@ def main(_):
                                     print("accuracy_poisson_:=",sess.run(accuracy_poisson))
                                 if gamma_mark==1:
                                     print("accuracy_gamma_:=",sess.run(accuracy_gamma))
+                        coord.request_stop()
+                        coord.join(threads)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
