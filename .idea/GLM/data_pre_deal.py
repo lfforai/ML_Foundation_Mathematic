@@ -127,12 +127,20 @@ when_case_style_30day={"database":["month_201606","month_201607","month_201608",
                       }#按一定时间区间对数据进行切分，划分为不同的风险暴露
 
 #把赔款数据匹配到每个车基数据上去 LFV2A1159C3567437 17 LVSHFFAL1FS337046 16
-pei2car_style={"database":["pei"]}
+select_columns_1="m.y_m_d,m.carid,m.c2_date,m.mileage,m.fuel,m.duration,m.maxspeed,m.accelerateTimes,m.decelerateTimes,m.sharpTurnTimes,m.isdrive,m.isfatigue,m.ishighspeed,m.pulloutTimes,m.isnonlocal,m.isnightdrive,m.vbigtime,m.maxmileage,m.totalmile,m.seg "
+select_columns_1="y_m_d,carid,c2_date,mileage,fuel,duration,maxspeed,accelerateTimes,decelerateTimes,sharpTurnTimes,isdrive,isfatigue,ishighspeed,pulloutTimes,isnonlocal,isnightdrive,vbigtime,maxmileage,totalmile,seg "
+
+select_columns_2="p.happen,p.claims,p.time_n,y_m_d,m.carid,c2_date,mileage,fuel,duration,maxspeed,accelerateTimes,decelerateTimes,sharpTurnTimes,isdrive,isfatigue,ishighspeed,pulloutTimes,isnonlocal,isnightdrive,vbigtime,maxmileage,totalmile,seg "
+pei2car_style={"database":["month_201606","month_201607","month_201608","month_201609",
+                           "month_201610","month_201611"],
+               "select_column_1":select_columns_1, #month_temp_1=month jion distinct_vin
+               "select_column_2":select_columns_2 #month_temp_2=month_temp_1 jion distinct_vin
+              }
 
 #数据校验的规则
-data_check_rule={"database":["month_201606","month_201607","month_201608","month_201609",
-                                   "month_201610","month_201611"],
-                }#按一定时间区间对数据进行切分，划分为不同的风险暴露
+# data_check_rule={"database":["month_201606","month_201607","month_201608","month_201609",
+#                                    "month_201610","month_201611"],
+#                 }#按一定时间区间对数据进行切分，划分为不同的风险暴露
 
 
 #（三）需要删除的table名字
@@ -141,7 +149,7 @@ delete_filename_list=["month_201606","month_201607","month_201608","month_201609
 # delete_filename_list=[]
 delete_filename_list=["carid2vin","carid2vin_2"]
 delete_filename_list=["pei_of_carid"]
-# delete_filename_list=[]
+delete_filename_list=[]
 
 # 二、mapd数据库链接设置
 mapd_con = mapd_jdbc.connect(
@@ -159,7 +167,7 @@ def pitch_delete(delete_file_list=delete_filename_list):
 
 #2、在mapd上创建表格
 #备注：mapd用户需要使用读入的数据需要放到/home/mapd文件夹下，不然会报错permission错误
-def create_csv2table(imput_file_style=imput_file_style,if_clear=True,if_input=[0,1,0]):
+def create_csv2table(imput_file_style=imput_file_style,if_clear=True,if_input=[1,0,1]):
     create_talbe_mapd="CREATE TABLE IF NOT EXISTS "
     i=0
     for e in imput_file_style:
@@ -233,47 +241,86 @@ def when_case_risk_range(when_case_style=when_case_style_30day,time_column="y_m_
     return 0
 
 #4、对赔付数据进行处理，用carid替换vin代码
-def pei_vin2car():
+def pei_vin2car(if_drop_carid=True,if_drop_dis=True,if_drop_happen=True,pei2car_style=pei2car_style):
+    create_talbe_mapd="CREATE TABLE "
     #vin替换为carid
-    pei_query="create table pei_of_carid as select carid2vin_2.carid,case when happen is NULL then 0 else 1 end as time_n,pei.happen,pei.claims from pei,carid2vin_2 where pei.vin=carid2vin_2.vin"
-    mapd_cursor.execute(pei_query)
+    # if if_drop_carid==True:
+    #    mapd_cursor.execute("DROP TABLE pei_of_carid")
+    # pei_query=create_talbe_mapd+"pei_of_carid as select carid2vin_2.carid,case when happen is NULL then 0 else 1 end as time_n,pei.happen,pei.claims from pei,carid2vin_2 where pei.vin=carid2vin_2.vin"
+    # mapd_cursor.execute(pei_query)
 
+    #distinct一个唯vin代码与车基数据进行匹配剔除掉
+    # if if_drop_dis==True:
+    #    mapd_cursor.execute("DROP TABLE distinct_vin")
+    # pei_query= create_talbe_mapd+"distinct_vin as select distinct(carid) from pei_of_carid"
+    # mapd_cursor.execute(pei_query)
 
-    #把出险次数和函数
+    #构建一个只有出险记录的数据集pei_happened
+    # if if_drop_happen==True:
+    #    mapd_cursor.execute("DROP TABLE pei_happen")
+    # pei_query=create_talbe_mapd+"pei_happen as select * from pei_of_carid  where time_n=1"
+    # mapd_cursor.execute(pei_query)
 
-#4、sql 对指标的准确性进行校验的规则
+    # if if_drop_happen==True:
+    #     mapd_cursor.execute("DROP TABLE pei_happen_group")
+    # pei_query="create table pei_happen_group as select carid,happen,sum(time_n) as time_t,sum(claims) as claims_t from pei_happen group by carid,happen"
+    # mapd_cursor.execute(pei_query)
+
+    #筛选出month中和distinct_vin相对应的有效样本，并在车基数据month中加入出险数据
+    if_drop_temp=True
+    for e in pei2car_style["database"]:
+        if if_drop_temp==True:
+           mapd_cursor.execute("drop table "+e+"_l")
+        # temp_list=list(map(lambda x:e+'.'+x,pei2car_style["select_column_1"].split(",")))
+        # temp_str=str(",".join(temp_list))
+        # query="copy (SELECT "+temp_str+"FROM "+e+" JOIN distinct_vin ON "+e+".carid=distinct_vin.carid) to "+"\'"+import_path_dir+e+"_temp_1.csv\'"
+        # print(query)
+        # mapd_cursor.execute(query)
+        # query="COPY "+e+"_temp_1 "+"FROM"+"\'"+import_path_dir+e+"_temp_1.csv\'"
+        # print(query)
+        # mapd_cursor.execute(query)
+        # print("---------------------------------------------------------------")
+
+        # temp_list=list(map(lambda x:e+'.'+x,pei2car_style["select_column_1"].split(",")))
+        # temp_str=str(",".join(temp_list))
+        # query="create table "+e+"_l"+"  as  (SELECT "+temp_str+"FROM "+e+" JOIN distinct_vin ON "+e+".carid=distinct_vin.carid)"
+        # print(query)
+        # mapd_cursor.execute(query)
+        # print("---------------------------------------------------------------")
+
+        temp_list=list(map(lambda x:e+'.'+x,pei2car_style["select_column_1"].split(",")))
+        temp_str=str(",".join(temp_list))
+        query="create table "+e+"_l"+"  as  (SELECT "+temp_str+"FROM "+e+" left JOIN distinct_vin ON "+e+".carid=distinct_vin.carid where distinct_vin.carid is not NULL)"
+        print(query)
+        mapd_cursor.execute(query)
+        print("---------------------------------------------------------------")
+
+    #select * from  month_201606_temp_1 m left join pei_happen p on m.carid=p.carid  and  EXTRACT(YEAR FROM m.y_m_d)=EXTRACT(YEAR FROM p.happen) and EXTRACT(MONTH FROM m.y_m_d)=EXTRACT(MONTH FROM p.happen) and EXTRACT(DAY FROM m.y_m_d)=EXTRACT(DAY FROM p.happen)
+    #select count(*) from  month_201611_temp_1 m left join pei_happen_group p on m.carid=p.carid  and  EXTRACT(YEAR FROM m.y_m_d)=EXTRACT(YEAR FROM p.happen) and EXTRACT(MONTH FROM m.y_m_d)=EXTRACT(MONTH FROM p.happen) and EXTRACT(DAY FROM m.y_m_d)=EXTRACT(DAY FROM p.happen)   where p.claims>0
+
+    #4、sql 对指标的准确性进行校验的规则
 # def check_rule():
 #     select isdrive,mileage from month_201611 where (isdrive=1 and mileage=0) or (isdrive=0 and mileage>0)
 #select carid2vin_2.carid,pei.happen,pei.claims from pei,carid2vin_2 where pei.vin=carid2vin_2.vin
 
-# 三、执行数据预计处理,不执行的步骤用#标记后跳过
+# 三、执行数据预计处理,不执行的步骤用#标记后跳过（代码的执行顺序不能乱）
 if len(delete_filename_list)>0:
    pitch_delete()
-# create_csv2table()
+#create_csv2table()
 # add_date()
 # when_case_risk_range()
-# pei_vin2car()
+pei_vin2car(if_drop_carid=True,if_drop_dis=False,if_drop_happen=False)
 
-
-
-
-
-
-
-
-
-
-
-
-
+query="select * from month_201606_temp_1"
 
 # Get the results
-
+# mapd_cursor.execute(query)
 # results = mapd_cursor.fetchall()
 
 # Make the results a Pandas DataFrame
 #
 # df = pandas.DataFrame(results)
+# print(df)
 # print("df:=",df)
 # print(type(df[1]))
 
