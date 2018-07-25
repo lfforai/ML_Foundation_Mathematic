@@ -693,9 +693,9 @@ def one_hot_sqltxt(dict_n=one_hot_style_90days["att_range"],key="mileage"):
 
         if i!=len_atrr-1:#最后一项
            att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
-           str_list.append("case when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then 1 else 0 end as "+key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
+           str_list.append("case when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then 1.0 else 0.0 end as "+key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
         else:
-           str_list.append("case when "+key+">="+str(e[0])+" then 1 else 0 end as "+key+"_"+str(int(e[0]))+"_g")
+           str_list.append("case when "+key+">="+str(e[0])+" then 1.0 else 0.0 end as "+key+"_"+str(int(e[0]))+"_g")
            att_list.append(key+"_"+str(int(e[0]))+"_g")
         i=i+1
     sql_text=str(",".join(str_list))
@@ -718,21 +718,73 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
     else:
         pei_query=one_hot_style["att_pei"].split(",")[1]#只要出险次数
 
+    #计算基准车基-----------------------------------
+    query="create table GLM_base_date_90Days_temp as select "+sql_text+" from GLM_base_date_90Days"#1为常数项
+    #求one_hot指标的权重
+    mapd_cursor.execute(query)
+    #每个车基数据被分为了多少段
+
+    list_len_each=[len(e.split(",")) for e in att_list]
+    list_temp=list(zip(list(range(list_len_each.__len__())),list_len_each))
+    list_temp=list(map(lambda x:[x[0]+1]*x[1],list_temp))
+    list_a=[]
+    for e in list_temp:
+        list_a.extend(e)
+
+    print("每个车基数据被分为了多少段:",list_len_each)
+    #所有用于建立GLM模型的车基指标名称（分段后的）
+    columns_name=",".join(att_list).split(",")
+    print("所有用于建立GLM模型的车基指标名称（分段后的）:",columns_name)
+    #每段数据的风险暴露数
+    query="select "+",".join(list(map(lambda x:"sum("+x+") as "+x,",".join(att_list).split(","))))+" from GLM_base_date_90Days_temp"
+    mapd_cursor.execute(query)
+    results = mapd_cursor.fetchall()
+    df = pandas.DataFrame(results)
+    risk_num=df.values[0]
+    print("风险暴露数据：",risk_num)
+    #合并数据求基准车基, list_a(分组号)+columns_name（分组名字）+risk_num(分组数)，目标max(risk_num) group by columns_name
+    car_base_list=[]
+    i=0
+    for e in list_len_each:#[6, 4, 5, 4, 5, 2, 5, 2]
+          max_value=0
+          max_att=""
+          for j in range(e):
+              if risk_num[j+i]>max_value:
+                 max_value=risk_num[j+i]
+                 max_att=columns_name[j+i]
+          car_base_list.append(max_att)
+          i=i+e
+    #得到基准车基列表
+    print("基准车基数据列表：",car_base_list)
+    #从代拟合数据中剔除基准车基
+    for e  in car_base_list:
+        columns_name.remove(e)
+    print("剔除基准车以后的剩余拟合车基数据表,长度：",columns_name,len(columns_name))
+    mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
+    att_text=",".join(columns_name)#替换指标集
+    #计算基准车基指标结束-----------------------------------------------
+
     if group_avg==False:#不求平均
         query="select 1 as constant,"+pei_query+","+sql_text+" from GLM_base_date_90Days"#1为常数项
         query="COPY ("+query+")  to "+'\''+import_path_dir+"output/GLM_base_date_90Days_one_hot.csv"+'\''+" with (header=\'True\')"
     else:#求平均
         query="create table GLM_base_date_90Days_temp as select "+pei_query+","+sql_text+" from GLM_base_date_90Days" #1为常数项
-        # mapd_cursor.execute(query)
-        query="select avg("+pei_query+") as "+pei_query+",count(*) as risk,1.0 as constant,"+att_text+" from GLM_base_date_90Days_temp group by "+att_text
+        mapd_cursor.execute(query)
 
+        query="select avg("+pei_query+") as "+pei_query+",count(*) as risk,1.0 as constant,"+att_text+" from GLM_base_date_90Days_temp group by "+att_text
+        print(query)
         query="COPY ("+query+")  to "+'\''+import_path_dir+"output/GLM_base_date_90Days_one_hot.csv"+'\''+" with (header=\'True\')"
         mapd_cursor.execute(query)
+
+        query="select avg("+pei_query+") as "+pei_query+",1.0 as constant,"+att_text+" from GLM_base_date_90Days_temp group by "+att_text
+        print(query)
+        query="COPY ("+query+")  to "+'\''+import_path_dir+"output/GLM_base_date_90Days_one_hot_norisk.csv"+'\''+" with (header=\'True\')"
+        mapd_cursor.execute(query)
+
+        mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
     return att_text
 
 a=value2one_hot(one_hot_style=one_hot_style_90days)
-
-
 
 # 三、执行数据预计处理,不执行的步骤用#标记后跳过（代码的执行顺序不能乱）
 delete_filename_list=["month_201606_temp","month_201607_temp","month_201608_temp","month_201609_temp",
