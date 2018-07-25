@@ -9,6 +9,54 @@ FLAGS = None
 
 #---------------------------------第一部分 GLM模型中需要数据预处理-------------------------------
 #1、tensorflow从csv文件中批量读取数据
+def read_my_file_format_csv(filename_queue,skip_header_lines=1):
+    str_temp="constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g"
+    list_temp=str_temp.split(",")
+    len=list_temp.__len__()
+
+    reader = tf.TextLineReader(skip_header_lines=skip_header_lines)
+    key, value = reader.read(filename_queue)
+    loss_total,risk,constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g = tf.decode_csv(value, record_defaults=[[1.0]]*(len+2))  #['null']解析为string类型 ，[1]为整型，[1.0]解析为浮点。
+    featrues=tf.stack([constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g])
+    label=loss_total
+    weight=risk
+    return label,weight,featrues                    #weight是每个样本的权重
+
+
+def input_pipeline_csv(filenames, batch_size, num_epochs=None,file_config="/home/mapd/dumps/output/att_name.txt"):
+    info_n={"att_modle_risk":"","att_modle_nh":"","att_modle_base":"","pei":""}
+    # #-*- coding: UTF-8 -*-
+    # f = open(file_config)             # 返回一个文件对象
+    # line = f.readline()
+    # print(line.split(":")[0])
+    # info_n[line.split(":")[0]]=line.split(":")[1]
+    # print(info_n[line.split(":")[0]])
+    # i=1
+    # while line and i<4:
+    #     line = f.readline()
+    #     print(line.split(":")[0])
+    #     info_n[line.split(":")[0]]=line.split(":")[1]
+    #     print(info_n[line.split(":")[0]])
+    #     i=i+1
+    # f.close()
+
+    filename_queue = tf.train.string_input_producer(
+        filenames, num_epochs=num_epochs, shuffle=True,seed=random.randint(1, 254))
+    label_a,weight_batch,featrues_a=read_my_file_format_csv(filename_queue,skip_header_lines=1)
+    # min_after_dequeue defines how big a buffer we will randomly sample
+    #   from -- bigger means better shuffling but slower start up and more
+    #   memory used.
+    # capacity must be larger than min_after_dequeue and the amount larger
+    #   determines the maximum we will prefetch.  Recommendation:
+    #   min_after_dequeue + (num_threads + a small safety margin) * batch_size
+    min_after_dequeue = 10000
+    capacity = min_after_dequeue + 3 * batch_size
+    y_batch,weight_batch,x_batch=tf.train.shuffle_batch(
+        [label_a,weight_batch,featrues_a], batch_size=batch_size, capacity=capacity,
+        min_after_dequeue=min_after_dequeue,seed=random.randint(1, 254))
+    return y_batch,weight_batch,x_batch
+
+
 def read_my_file_format(filename_queue,skip_header_lines=1):
     reader = tf.TextLineReader(skip_header_lines=skip_header_lines)
     key, value = reader.read(filename_queue)
@@ -72,7 +120,7 @@ def medie_tensor_list(std_list=[tf.constant([0.0,100.0,150.0,300.0]),tf.constant
 
 #tweedie分布拟合总赔款模型 w是需要拟合的变量
 def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
-    y_total_loss=tf.reshape(tf.slice(y,[0,0],[-1,1]),[-1])#确定y
+    y_total_loss=y#确定y
     u=tf.exp(tf.reduce_sum(x*w,axis=1))
     theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
     K_theta=(-1.0)/(p-2.0)*tf.pow(((-(p-1.0))*theta),(p-2.0)/(p-1.0))
@@ -101,8 +149,8 @@ def Poisson_model(y,weight,x,w):
 def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
-    filenames=['./data.csv', './data1.csv', './data2.csv']
-    batch_size=100
+    filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
+    batch_size=2500
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
@@ -121,9 +169,10 @@ def main(_):
     if if_constant==True:
         arr_len_sum=arr_len_sum+1#增加一个常数项
 
+    arr_len_sum=26
     gamma_mark=0;#拟合案均赔款
-    poisson_mark=1;#拟合出险次数
-    tweedie_mark=0;#拟合总赔款
+    poisson_mark=0;#拟合出险次数
+    tweedie_mark=1;#拟合总赔款
 
     #二、设置服务器
     ps_hosts = FLAGS.ps_hosts.split(",")
@@ -147,73 +196,76 @@ def main(_):
                 worker_device="/job:worker/task:%d/gpu:0" %FLAGS.task_index,
                 cluster=cluster)):
             with tf.device('/cpu:0'):
-                 y_batch,weight_batch,x_batch=input_pipeline(filenames, batch_size=batch_size, num_epochs=num_epochs)
-            if std_list.__len__()!=x_batch.shape[1]:
-                print("需要离散化的指标个数与离散化区间（std_list）个数不一致！")
-                exit()
+                y_batch,weight_batch,x_batch=input_pipeline_csv(filenames, batch_size=batch_size, num_epochs=num_epochs)
 
-            #----------------------------1、开始指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
-            def map_func(x_func=tf.constant(1),std_list=std_list,arr_mark=[]):
-                temp=[]
-                for j in range(x_func.shape[0]):
-                    temp.append(cut2pitch(x_func[j],std_list[j],arr_mark[j]))
-                return tf.stack(temp,axis=0)
+            not_scrate=False
+            if not_scrate==True:
+                if std_list.__len__()!=x_batch.shape[1]:
+                    print("需要离散化的指标个数与离散化区间（std_list）个数不一致！")
+                    exit()
 
-            #把离散化指标转化为GLM模型的[1,0,0]这类格式
-            #比如指标[A,B,C],[A:1,0,0][B:0,1,0][C:0,0,1],arr_mark:1表示它是连续区间需要切割区间：0表示本身就是离散变量不用切割区间
-            #把分段区间标准化
-            with tf.device('/cpu:0'):
-                x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
+                #----------------------------1、开始指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
+                def map_func(x_func=tf.constant(1),std_list=std_list,arr_mark=[]):
+                    temp=[]
+                    for j in range(x_func.shape[0]):
+                        temp.append(cut2pitch(x_func[j],std_list[j],arr_mark[j]))
+                    return tf.stack(temp,axis=0)
 
-            #把每一个指标的每个指标，转换为标准的【0，1】
-            def map_func_2(x_n=tf.constant([1.25,1.575,2.50,3.00])):
-                def map_func_e(x=x_n,std_list=x_std):
-                    def map_func_in(value=tf.constant(0.0)):
-                        def in_func(value=value,temp=temp_mid):
-                            result=tf.cond(tf.equal(value,temp),lambda :tf.constant(1.0),lambda :tf.constant(0.0))
-                            return result
-                        return in_func(value=value,temp=temp_mid)
-                    result=[]
-                    #遍历每一个指标[1.25,1.575,2.50,3.00]
-                    for i in range(x.shape[0]):
-                        temp_mid=x[i]
-                        result.append(tf.map_fn(map_func_in,std_list[i]))
-                    result=tf.concat(result,axis=0)
-                    return result
-                return map_func_e(x=x_n,std_list=x_std)
-            with tf.device('/cpu:0'):
-                x=tf.map_fn(lambda x:map_func(x_func=x,std_list=std_list,arr_mark=arr_mark),x_batch)
-
-            if if_constant==True:#在指标中添加一个常数项b0
-                x_onehot=tf.map_fn(map_func_2,x)
-                def map_func_add_one(x=tf.constant(0)):
-                    return tf.concat([tf.constant([1.0]),x],axis=0)
+                #把离散化指标转化为GLM模型的[1,0,0]这类格式
+                #比如指标[A,B,C],[A:1,0,0][B:0,1,0][C:0,0,1],arr_mark:1表示它是连续区间需要切割区间：0表示本身就是离散变量不用切割区间
+                #把分段区间标准化
                 with tf.device('/cpu:0'):
-                    x_onehot=tf.map_fn(map_func_add_one,x_onehot)
-            else:
+                    x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
+
+                #把每一个指标的每个指标，转换为标准的【0，1】
+                def map_func_2(x_n=tf.constant([1.25,1.575,2.50,3.00])):
+                    def map_func_e(x=x_n,std_list=x_std):
+                        def map_func_in(value=tf.constant(0.0)):
+                            def in_func(value=value,temp=temp_mid):
+                                result=tf.cond(tf.equal(value,temp),lambda :tf.constant(1.0),lambda :tf.constant(0.0))
+                                return result
+                            return in_func(value=value,temp=temp_mid)
+                        result=[]
+                        #遍历每一个指标[1.25,1.575,2.50,3.00]
+                        for i in range(x.shape[0]):
+                            temp_mid=x[i]
+                            result.append(tf.map_fn(map_func_in,std_list[i]))
+                        result=tf.concat(result,axis=0)
+                        return result
+                    return map_func_e(x=x_n,std_list=x_std)
                 with tf.device('/cpu:0'):
+                    x=tf.map_fn(lambda x:map_func(x_func=x,std_list=std_list,arr_mark=arr_mark),x_batch)
+
+                if if_constant==True:#在指标中添加一个常数项b0
                     x_onehot=tf.map_fn(map_func_2,x)
+                    def map_func_add_one(x=tf.constant(0)):
+                        return tf.concat([tf.constant([1.0]),x],axis=0)
+                    with tf.device('/cpu:0'):
+                        x_onehot=tf.map_fn(map_func_add_one,x_onehot)
+                else:
+                    with tf.device('/cpu:0'):
+                        x_onehot=tf.map_fn(map_func_2,x)
             #----------------------------结束指标进入和切分为[1,0,0,0]预处理部分------------------------------------------------
 
             #----------------------------2、拟合模型--------------------------------------------------------------------------
             hooks=[tf.train.StopAtStepHook(last_step=1000000)]
             global_step = tf.train.get_or_create_global_step()
 
-            # The StopAtStepHook handles stopping after running given steps.
+            #The StopAtStepHook handles stopping after running given steps.
             w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
-            loss_tweedie=(-1.0)*tweedie_model(y_batch,weight_batch,x_onehot,w_tweedie,p=tf.constant(1.5))
+            loss_tweedie=(-1.0)*tweedie_model(y_batch,weight_batch,x_batch,w_tweedie,p=tf.constant(1.5))
             optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
-            accuracy_tweedie=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_tweedie),axis=1))-tf.reshape(tf.slice(y_batch,[0,0],[-1,1]),[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
+            accuracy_tweedie=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-tf.reshape(y_batch,[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
 
-            w_gamma=tf.get_variable(name='gamma_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
-            loss_gamma=(-1.0)*gamma_model(y_batch,weight_batch,x_onehot,w_gamma,Alfa=2.0)
-            optimizer_gamma=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_gamma,global_step=global_step)
-            accuracy_gamma=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_gamma),axis=1))-tf.reshape(tf.slice(y_batch,[0,1],[-1,1]),[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
-
-            w_poisson=tf.get_variable(name='poisson_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
-            loss_poisson=(-1.0)*Poisson_model(y_batch,weight_batch,x_onehot,w_poisson)
-            optimizer_poisson=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_poisson,global_step=global_step)
-            accuracy_poisson=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_poisson),axis=1))-tf.reshape(tf.slice(y_batch,[0,2],[-1,1]),[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
+            # w_gamma=tf.get_variable(name='gamma_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+            # loss_gamma=(-1.0)*gamma_model(y_batch,weight_batch,x_onehot,w_gamma,Alfa=2.0)
+            # optimizer_gamma=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_gamma,global_step=global_step)
+            # accuracy_gamma=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_gamma),axis=1))-tf.reshape(tf.slice(y_batch,[0,1],[-1,1]),[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
+            #
+            # w_poisson=tf.get_variable(name='poisson_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+            # loss_poisson=(-1.0)*Poisson_model(y_batch,weight_batch,x_onehot,w_poisson)
+            # optimizer_poisson=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_poisson,global_step=global_step)
+            # accuracy_poisson=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_onehot, w_poisson),axis=1))-tf.reshape(tf.slice(y_batch,[0,2],[-1,1]),[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
             #----------------------------2、结束拟合模型-----------------------------------------------------------------------
 
             init = tf.global_variables_initializer()
@@ -230,18 +282,18 @@ def main(_):
                         for i in  range(10000):
                             if tweedie_mark==1:
                                 sess.run(optimizer_tweedie)
-                            if poisson_mark==1:
-                                sess.run(optimizer_poisson)
-                            if gamma_mark==1:
-                                sess.run(optimizer_gamma)
+                            # if poisson_mark==1:
+                            #     sess.run(optimizer_poisson)
+                            # if gamma_mark==1:
+                            #     sess.run(optimizer_gamma)
 
                             if  i%100==0:
                                 if tweedie_mark==1:
                                     print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
-                                if poisson_mark==1:
-                                    print("accuracy_poisson_:=",sess.run(accuracy_poisson))
-                                if gamma_mark==1:
-                                    print("accuracy_gamma_:=",sess.run(accuracy_gamma))
+                                # if poisson_mark==1:
+                                #     print("accuracy_poisson_:=",sess.run(accuracy_poisson))
+                                # if gamma_mark==1:
+                                #     print("accuracy_gamma_:=",sess.run(accuracy_gamma))
                         coord.request_stop()
                         coord.join(threads)
 

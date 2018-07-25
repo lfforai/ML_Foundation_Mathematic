@@ -702,6 +702,12 @@ def one_hot_sqltxt(dict_n=one_hot_style_90days["att_range"],key="mileage"):
     att_text=str(",".join(att_list))
     return sql_text,att_text
 
+def write2txt(txtName = "codingWord.txt",des_txt=""):
+    import os
+    with open(txtName,"w") as f:
+        f.write(des_txt)
+        f.close()
+
 #设置需要进行拟合的数据，并转换为one_hot(1,0,0)的形式,pei_or_time=是赔付还是次数,group_avg是否需要按车基属性进行一次group求平均
 def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg=True):
     str_list=[]#记录case when
@@ -761,13 +767,22 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
         columns_name.remove(e)
     print("剔除基准车以后的剩余拟合车基数据表,长度：",columns_name,len(columns_name))
     mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
-    att_text=",".join(columns_name)#替换指标集
+    att_text=",".join(columns_name)#替换指标集\
+
+    #把参数写入到txt文档中，供tensorflow使用
+    to_txt= "att_modle_risk:risk"+"\n"\
+           +"att_modle_nh:constant,"+att_text+"\n" \
+           +"att_modle_base:"+",".join(car_base_list)+"\n"\
+           +"pei:claims_use\n"
+
+    write2txt("/home/mapd/dumps/output/att_name.txt",to_txt)
+    exit()
     #计算基准车基指标结束-----------------------------------------------
 
     if group_avg==False:#不求平均
+        print(" group_avg==False")
         query="create table GLM_base_date_90Days_temp as select "+pei_query+","+sql_text+" from GLM_base_date_90Days" #1为常数项
         mapd_cursor.execute(query)
-
 
         query="select "+pei_query+",1.0 as constant,"+att_text+" from GLM_base_date_90Days_temp"
         print(query)
@@ -777,6 +792,7 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
         mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
 
     else:#求平均
+        print(" group_avg==true")
         query="create table GLM_base_date_90Days_temp as select "+pei_query+","+sql_text+" from GLM_base_date_90Days" #1为常数项
         mapd_cursor.execute(query)
 
@@ -793,7 +809,7 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
         mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
     return att_text
 
-a=value2one_hot(one_hot_style=one_hot_style_90days,group_avg=True)
+value2one_hot(one_hot_style=one_hot_style_90days,group_avg=True)
 
 # 三、执行数据预计处理,不执行的步骤用#标记后跳过（代码的执行顺序不能乱）
 delete_filename_list=["month_201606_temp","month_201607_temp","month_201608_temp","month_201609_temp",
