@@ -765,8 +765,17 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
     #计算基准车基指标结束-----------------------------------------------
 
     if group_avg==False:#不求平均
-        query="select 1 as constant,"+pei_query+","+sql_text+" from GLM_base_date_90Days"#1为常数项
-        query="COPY ("+query+")  to "+'\''+import_path_dir+"output/GLM_base_date_90Days_one_hot.csv"+'\''+" with (header=\'True\')"
+        query="create table GLM_base_date_90Days_temp as select "+pei_query+","+sql_text+" from GLM_base_date_90Days" #1为常数项
+        mapd_cursor.execute(query)
+
+
+        query="select "+pei_query+",1.0 as constant,"+att_text+" from GLM_base_date_90Days_temp"
+        print(query)
+        query="COPY ("+query+")  to "+'\''+import_path_dir+"output/GLM_base_date_90Days_one_hot_norisk.csv"+'\''+" with (header=\'True\')"
+        mapd_cursor.execute(query)
+
+        mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
+
     else:#求平均
         query="create table GLM_base_date_90Days_temp as select "+pei_query+","+sql_text+" from GLM_base_date_90Days" #1为常数项
         mapd_cursor.execute(query)
@@ -784,7 +793,7 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
         mapd_cursor.execute("drop table GLM_base_date_90Days_temp")
     return att_text
 
-a=value2one_hot(one_hot_style=one_hot_style_90days)
+a=value2one_hot(one_hot_style=one_hot_style_90days,group_avg=True)
 
 # 三、执行数据预计处理,不执行的步骤用#标记后跳过（代码的执行顺序不能乱）
 delete_filename_list=["month_201606_temp","month_201607_temp","month_201608_temp","month_201609_temp",
