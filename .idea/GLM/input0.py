@@ -124,7 +124,8 @@ def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
     u=tf.exp(tf.reduce_sum(x*w,axis=1))
     theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
     K_theta=(-1.0)/(p-2.0)*tf.pow(((-(p-1.0))*theta),(p-2.0)/(p-1.0))
-    loss=tf.reduce_sum(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta),axis=0)/tf.reduce_sum(weight,axis=0)
+    loss=tf.reduce_sum(weight*(y_total_loss*theta-K_theta),axis=0)/tf.reduce_sum(weight,axis=0)
+    # loss=tf.reduce_sum(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta),axis=0)/tf.reduce_sum(weight,axis=0)
     return loss
 
 #gamma分布拟合案均赔款模型 #拟合模型时候只用到均值u，而没有利用Alfa，计算标准差时候需要
@@ -150,7 +151,7 @@ def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
     filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
-    batch_size=2500
+    batch_size=500
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
@@ -193,10 +194,10 @@ def main(_):
     elif FLAGS.job_name == "worker":
         # # Assigns ops to the local worker by default.
         with tf.device(tf.train.replica_device_setter(
-                worker_device="/job:worker/task:%d/gpu:0" %FLAGS.task_index,
+                worker_device="/job:worker/task:%d" %FLAGS.task_index,
                 cluster=cluster)):
-            with tf.device('/cpu:0'):
-                 y_batch,weight_batch,x_batch=input_pipeline_csv(filenames, batch_size=batch_size, num_epochs=num_epochs)
+            # with tf.device('/cpu:0'):
+            y_batch,weight_batch,x_batch=input_pipeline_csv(filenames, batch_size=batch_size, num_epochs=num_epochs)
 
             not_scrate=False
             if not_scrate==True:
@@ -214,8 +215,8 @@ def main(_):
                 #把离散化指标转化为GLM模型的[1,0,0]这类格式
                 #比如指标[A,B,C],[A:1,0,0][B:0,1,0][C:0,0,1],arr_mark:1表示它是连续区间需要切割区间：0表示本身就是离散变量不用切割区间
                 #把分段区间标准化
-                with tf.device('/cpu:0'):
-                    x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
+                # with tf.device('/cpu:0'):
+                x_std=medie_tensor_list(std_list=std_list,arr_mark=arr_mark)
 
                 #把每一个指标的每个指标，转换为标准的【0，1】
                 def map_func_2(x_n=tf.constant([1.25,1.575,2.50,3.00])):
@@ -250,13 +251,16 @@ def main(_):
             #----------------------------2、拟合模型--------------------------------------------------------------------------
             hooks=[tf.train.StopAtStepHook(last_step=1000000)]
             global_step = tf.train.get_or_create_global_step()
-
-            #The StopAtStepHook handles stopping after running given steps.
-            w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
-            loss_tweedie=(-1.0)*tweedie_model(y_batch,weight_batch,x_batch,w_tweedie,p=tf.constant(1.5))
+            with tf.device('/gpu:1'):
+                #The StopAtStepHook handles stopping after running given steps.
+                # with tf.device('/gpu:0'):
+                #The StopAtStepHook handles stopping after running given steps.
+                w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+                loss_tweedie=-tweedie_model(y_batch,weight_batch,x_batch,w_tweedie,p=tf.constant(1.5))
             optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
-            accuracy_tweedie=tf.sqrt(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-tf.reshape(y_batch,[-1]),2)*weight_batch)/tf.reduce_sum(weight_batch))
-
+            accuracy_tweedie=tf.reduce_sum(tf.abs(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-y_batch)*weight_batch,axis=0)/tf.reduce_sum(weight_batch,axis=0)
+            # print(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-y_batch,2)*weight_batch).shape)
+            # exit()
             # w_gamma=tf.get_variable(name='gamma_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
             # loss_gamma=(-1.0)*gamma_model(y_batch,weight_batch,x_onehot,w_gamma,Alfa=2.0)
             # optimizer_gamma=tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_gamma,global_step=global_step)
@@ -269,33 +273,39 @@ def main(_):
             #----------------------------2、结束拟合模型-----------------------------------------------------------------------
 
             init = tf.global_variables_initializer()
-            with tf.device('/cpu:0'):
-                # The StopAtStepHook handles stopping after running given steps.
-                with tf.train.MonitoredTrainingSession(master=server.target,
-                                                       is_chief=(FLAGS.task_index == 0),
-                                                       checkpoint_dir="/temp/lf",
-                                                       hooks=hooks) as sess:
-                    sess.run(init)
-                    coord = tf.train.Coordinator()#创建一个协调器，管理线程
-                    threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
-                    while not sess.should_stop():
-                        for i in  range(10000):
-                            if tweedie_mark==1:
-                                sess.run(optimizer_tweedie)
-                            # if poisson_mark==1:
-                            #     sess.run(optimizer_poisson)
-                            # if gamma_mark==1:
-                            #     sess.run(optimizer_gamma)
+            # with tf.device('/cpu:0'):
+            # The StopAtStepHook handles stopping after running given steps.
+            with tf.train.MonitoredTrainingSession(master=server.target,
+                                                   is_chief=(FLAGS.task_index == 0),
+                                                   checkpoint_dir="/temp/lf",
+                                                   hooks=hooks) as sess:
+                sess.run(init)
+                coord = tf.train.Coordinator()#创建一个协调器，管理线程
+                threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
+                while not sess.should_stop():
+                    for i in  range(10000):
+                        if tweedie_mark==1:
+                            # print(sess.run(x_batch))
+                            # print(sess.run(x_batch).shape[1])
+                            # print(sess.run(y_batch))
+                            # print(sess.run(weight_batch))
+                            # exit()
+                            sess.run(optimizer_tweedie)
 
-                            if  i%100==0:
-                                if tweedie_mark==1:
-                                    print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
-                                # if poisson_mark==1:
-                                #     print("accuracy_poisson_:=",sess.run(accuracy_poisson))
-                                # if gamma_mark==1:
-                                #     print("accuracy_gamma_:=",sess.run(accuracy_gamma))
-                        coord.request_stop()
-                        coord.join(threads)
+                        # if poisson_mark==1:
+                        #     sess.run(optimizer_poisson)
+                        # if gamma_mark==1:
+                        #     sess.run(optimizer_gamma)
+
+                        if  i%30==0:
+                            if tweedie_mark==1:
+                                print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
+                            # if poisson_mark==1:
+                            #     print("accuracy_poisson_:=",sess.run(accuracy_poisson))
+                            # if gamma_mark==1:
+                            #     print("accuracy_gamma_:=",sess.run(accuracy_gamma))
+                    coord.request_stop()
+                    coord.join(threads)
 
 
 if __name__ == "__main__":
@@ -312,6 +322,7 @@ if __name__ == "__main__":
         "--worker_hosts",
         type=str,
         default="localhost:2224,localhost:2225,localhost:2226,localhost:2227",
+        # default="localhost:2224",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(

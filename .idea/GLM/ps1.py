@@ -252,6 +252,7 @@ if __name__ == "__main__":
         "--worker_hosts",
         type=str,
         default="localhost:2224,localhost:2225,localhost:2226,localhost:2227",
+        # default="localhost:2224",
         help="Comma-separated list of hostname:port pairs"
     )
     parser.add_argument(
