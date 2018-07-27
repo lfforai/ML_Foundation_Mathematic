@@ -79,21 +79,26 @@ def Poisson_model(y,weight,x,w):
 
 
 def main():
-    with tf.device('/cpu:0'):
+    # with tf.device('/gpu:0'):
         arr_len_sum=26
-        learning_rate=0.01
+        learning_rate=1
+        learning_rate_1=0.1
+        learning_rate_2=0.01
         filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
-        batch_size=3000
+        batch_size=3800
         num_epochs=None
         y_batch,weight_batch,x_batch=input_pipeline_csv(filenames, batch_size=batch_size, num_epochs=num_epochs)
         global_step =tf.Variable(0,trainable=False)
 
         # 必须要指定文件夹，保存到ckpt文件
-        # with tf.device('/gpu:1'):
-        w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
-        loss_tweedie=-tweedie_model(y_batch,weight_batch,x_batch,w_tweedie)
+        with tf.device('/gpu:1'):
+             w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
+             loss_tweedie=-tweedie_model(y_batch,weight_batch,x_batch,w_tweedie)
         #,p=tf.constant(1.5))
         optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
+        #optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
+        optimizer_tweedie_1 = tf.train.AdamOptimizer(learning_rate=learning_rate_1).minimize(loss_tweedie,global_step=global_step)
+        optimizer_tweedie_2 = tf.train.AdamOptimizer(learning_rate=learning_rate_2).minimize(loss_tweedie,global_step=global_step)
         #optimizer_tweedie=tf.train.MomentumOptimizer(learning_rate=learning_rate,momentum=0.85).minimize(loss=loss_tweedie,global_step=global_step)
         accuracy_tweedie=tf.reduce_sum(tf.abs(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-y_batch)*weight_batch,axis=0)/tf.reduce_sum(weight_batch,axis=0)
 
@@ -107,8 +112,8 @@ def main():
         config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
         with tf.Session(config=config) as sess:
-            # sess.run(init)
-            saver.restore(sess, '/temp/lf2/model.ckpt-300')
+            sess.run(init)
+            # saver.restore(sess, '/temp/lf2/model.ckpt-300')
             print(sess.run(w_tweedie))
             coord = tf.train.Coordinator()#创建一个协调器，管理线程
             threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
@@ -116,16 +121,22 @@ def main():
             mark=1000
             # saver.restore(sess, "/temp/lf2/100.ckpt")
             while(True):
-              if mark<0.5:
-                 break
-              sess.run(optimizer_tweedie)
-              if  i%20==0:
-                  mark=sess.run(accuracy_tweedie)
-                  print("accuracy_tweedie_:=",mark)
-                  print("global_step:=",sess.run(global_step))
-              if i%300==0:
-                 save_path=saver.save(sess, "/temp/lf2/model.ckpt-"+str(i))
-              i=i+1
+                 if mark<0.5:
+                    break
+                 if i<=100:
+                     sess.run(optimizer_tweedie)
+                 if i>100 and i<=500:
+                     sess.run(optimizer_tweedie_1)
+                 if i>500:
+                     sess.run(optimizer_tweedie_2)
+
+                 if  i%20==0:
+                      mark=sess.run(accuracy_tweedie)
+                      print("accuracy_tweedie_:=",mark)
+                      print("global_step:=",sess.run(global_step))
+                 if i%300==0:
+                     save_path=saver.save(sess, "/temp/lf2/model.ckpt-"+str(i))
+                 i=i+1
             coord.request_stop()
             coord.join(threads)
 main()

@@ -125,7 +125,7 @@ def tweedie_model(y,weight,x,w,p=tf.constant(1.5)):
     theta=(-1.0)/(p-1.0)*tf.pow(u,(-1.0)*(p-1.0))
     K_theta=(-1.0)/(p-2.0)*tf.pow(((-(p-1.0))*theta),(p-2.0)/(p-1.0))
     loss=tf.reduce_sum(weight*(y_total_loss*theta-K_theta),axis=0)/tf.reduce_sum(weight,axis=0)
-    #loss=tf.reduce_sum(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta),axis=0)/tf.reduce_sum(weight,axis=0)
+    # loss=tf.reduce_sum(tf.multiply(weight,tf.multiply(y_total_loss,theta)-K_theta),axis=0)/tf.reduce_sum(weight,axis=0)
     return loss
 
 #gamma分布拟合案均赔款模型 #拟合模型时候只用到均值u，而没有利用Alfa，计算标准差时候需要
@@ -151,7 +151,7 @@ def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
     filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
-    batch_size=500
+    batch_size=3800
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
@@ -159,7 +159,9 @@ def main(_):
 
     arr_mark=[0,0,0]#每个指标是否为需要离散化的指标
     if_constant=True#是否需要常数项
-    learning_rate=0.05
+    learning_rate=0.3
+    learning_rate_1=0.05
+    learning_rate_2=0.001
 
     arr_len_sum=0#指标的总长度
     for e in range(std_list.__len__()):
@@ -258,6 +260,8 @@ def main(_):
                 w_tweedie=tf.get_variable(name='tweedie_var', shape=[arr_len_sum], initializer=tf.random_normal_initializer(mean=0, stddev=1))
                 loss_tweedie=-tweedie_model(y_batch,weight_batch,x_batch,w_tweedie,p=tf.constant(1.5))
             optimizer_tweedie = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_tweedie,global_step=global_step)
+            optimizer_tweedie_1 = tf.train.AdamOptimizer(learning_rate=learning_rate_1).minimize(loss_tweedie,global_step=global_step)
+            optimizer_tweedie_2 = tf.train.AdamOptimizer(learning_rate=learning_rate_2).minimize(loss_tweedie,global_step=global_step)
             accuracy_tweedie=tf.reduce_sum(tf.abs(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-y_batch)*weight_batch,axis=0)/tf.reduce_sum(weight_batch,axis=0)
             # print(tf.reduce_sum(tf.pow(tf.exp(tf.reduce_sum(tf.multiply(x_batch, w_tweedie),axis=1))-y_batch,2)*weight_batch).shape)
             # exit()
@@ -290,14 +294,18 @@ def main(_):
                             # print(sess.run(y_batch))
                             # print(sess.run(weight_batch))
                             # exit()
-                            sess.run(optimizer_tweedie)
-
+                            if i<=100:
+                                sess.run(optimizer_tweedie)
+                            if i>100 and i<=500:
+                                sess.run(optimizer_tweedie_1)
+                            if i>500:
+                                sess.run(optimizer_tweedie_2)
                         # if poisson_mark==1:
                         #     sess.run(optimizer_poisson)
                         # if gamma_mark==1:
                         #     sess.run(optimizer_gamma)
 
-                        if  i%100==0:
+                        if  i%30==0:
                             if tweedie_mark==1:
                                 print("accuracy_tweedie_:=",sess.run(accuracy_tweedie))
                             # if poisson_mark==1:
@@ -306,6 +314,7 @@ def main(_):
                             #     print("accuracy_gamma_:=",sess.run(accuracy_gamma))
                     coord.request_stop()
                     coord.join(threads)
+
 
 
 if __name__ == "__main__":
