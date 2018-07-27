@@ -12,19 +12,19 @@ import random as random
 
 FLAGS = None
 
-batch_size=3800
+batch_size=500
 def read_my_file_format_csv(filename_queue,skip_header_lines=1):
-    str_temp="constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g"
+    str_temp="constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_20_30,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g"
     list_temp=str_temp.split(",")
     len=list_temp.__len__()
 
     reader = tf.TextLineReader(skip_header_lines=skip_header_lines)
     key, value = reader.read(filename_queue)
-    loss_total,risk,constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g = tf.decode_csv(value, record_defaults=[[1.0]]*(len+2))  #['null']解析为string类型 ，[1]为整型，[1.0]解析为浮点。
-    featrues=tf.stack([constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g])
+    loss_total,risk,constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_20_30,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g = tf.decode_csv(value, record_defaults=[[1.0]]*(len+2))  #['null']解析为string类型 ，[1]为整型，[1.0]解析为浮点。
+    featrues=tf.stack([constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_20_30,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g])
     label=loss_total
     weight=risk
-    return label,weight,featrues                    #weight是每个样本的权重
+    return label,weight,featrues                      #weight是每个样本的权重
 
 
 def input_pipeline_csv(filenames, batch_size, num_epochs=None,file_config="/home/mapd/dumps/output/att_name.txt"):
@@ -80,12 +80,12 @@ def Poisson_model(y,weight,x,w):
 
 def main():
     # with tf.device('/gpu:0'):
-        arr_len_sum=26
+        arr_len_sum=27
         learning_rate=1
         learning_rate_1=0.1
         learning_rate_2=0.01
         filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
-        batch_size=3800
+        batch_size=500
         num_epochs=None
         y_batch,weight_batch,x_batch=input_pipeline_csv(filenames, batch_size=batch_size, num_epochs=num_epochs)
         global_step =tf.Variable(0,trainable=False)
@@ -114,7 +114,6 @@ def main():
         with tf.Session(config=config) as sess:
             sess.run(init)
             # saver.restore(sess, '/temp/lf2/model.ckpt-300')
-            print(sess.run(w_tweedie))
             coord = tf.train.Coordinator()#创建一个协调器，管理线程
             threads = tf.train.start_queue_runners(sess=sess,coord=coord)#启动QueueRunner，此时文件名队列已经进队
             i=0

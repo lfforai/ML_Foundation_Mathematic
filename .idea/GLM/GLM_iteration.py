@@ -3,7 +3,7 @@ import csv
 import tensorflow as tf
 import numpy as np
 
-row_num=26 #参数个数，含常数项1
+row_num=27 #参数个数，含常数项1
 
 def readcsv(filename="/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv"):
     y=[]
@@ -53,7 +53,7 @@ def tweedie_model(y=y,w=w,x=x,b_1=1.0,arr_len_sum=row_num):#用迭代法计算�
     sess.close()
     return  b_2
 
-b_1=np.zeros(26)
+b_1=np.zeros(27)
 b_2=tweedie_model(y=y,w=w,x=x,b_1=b_1,arr_len_sum=row_num)
 while True:
     b_1=b_2

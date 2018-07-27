@@ -10,17 +10,17 @@ FLAGS = None
 #---------------------------------第一部分 GLM模型中需要数据预处理-------------------------------
 #1、tensorflow从csv文件中批量读取数据
 def read_my_file_format_csv(filename_queue,skip_header_lines=1):
-    str_temp="constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g"
+    str_temp="constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_20_30,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g"
     list_temp=str_temp.split(",")
     len=list_temp.__len__()
 
     reader = tf.TextLineReader(skip_header_lines=skip_header_lines)
     key, value = reader.read(filename_queue)
-    loss_total,risk,constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g = tf.decode_csv(value, record_defaults=[[1.0]]*(len+2))  #['null']解析为string类型 ，[1]为整型，[1.0]解析为浮点。
-    featrues=tf.stack([constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g])
+    loss_total,risk,constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_20_30,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g = tf.decode_csv(value, record_defaults=[[1.0]]*(len+2))  #['null']解析为string类型 ，[1]为整型，[1.0]解析为浮点。
+    featrues=tf.stack([constant,mileage_0_2000,mileage_4000_6000,mileage_6000_8000,mileage_8000_10000,mileage_10000_g,duration_0_400000,duration_800000_1200000,duration_1200000_g,maxspeed_0_24,maxspeed_24_48,maxspeed_72_96,maxspeed_96_g,a_10_20,a_20_30,a_30_40,a_40_g,d_100_200,d_200_300,d_300_400,d_400_g,isf_2_g,ish_9_18,ish_18_27,ish_27_36,ish_36_g,isn_0_g])
     label=loss_total
     weight=risk
-    return label,weight,featrues                    #weight是每个样本的权重
+    return label,weight,featrues                    #weight是每个样本的权重                  #weight是每个样本的权重
 
 
 def input_pipeline_csv(filenames, batch_size, num_epochs=None,file_config="/home/mapd/dumps/output/att_name.txt"):
@@ -151,7 +151,7 @@ def main(_):
     print(FLAGS)
     #一、参数设置和文件路径
     filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
-    batch_size=3800
+    batch_size=500
     num_epochs=None
     std_list=[tf.constant([1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]), \
               tf.constant([1.0,2.0,3.0,4.0]), \
@@ -172,7 +172,7 @@ def main(_):
     if if_constant==True:
         arr_len_sum=arr_len_sum+1#增加一个常数项
 
-    arr_len_sum=26
+    arr_len_sum=27
     gamma_mark=0;#拟合案均赔款
     poisson_mark=0;#拟合出险次数
     tweedie_mark=1;#拟合总赔款

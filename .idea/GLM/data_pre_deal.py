@@ -823,7 +823,6 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
            +"weight:"+",".join([str(int(e)) for e in risk_num])
 
     write2txt("/home/mapd/dumps/output/att_name.txt",to_txt)
-    exit()
     #计算基准车基指标结束-----------------------------------------------
     if group_avg==False:#不求平均
         print(" group_avg==False")
@@ -863,7 +862,7 @@ delete_filename_list=["month_201606_temp","month_201607_temp","month_201608_temp
                       "month_201610_temp_use","month_201611_temp_use"]
 
 delete_filename_list=[]
-delete_filename_list=["month_201608","month_201609"
+delete_filename_list=["month_201609",
                       "month_201610","month_201608_base","month_201609_base",
                       "month_201610_base"]
 delete_filename_list=[]
@@ -876,7 +875,7 @@ delete_filename_list=[]
 # when_case_risk_range(when_case_style=when_case_style_90day)#medie为中间文件
 # pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_90_style,if_deal_pei=False)
 #save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='88.0',seg_range='90Days',mismatching=False)
-value2one_hot(one_hot_style=one_hot_style_90days,group_avg=False)
+#value2one_hot(one_hot_style=one_hot_style_90days,group_avg=True)
 
 #30天对齐版：使用claim_t(对齐)或者claim_use(对齐)
 # if len(delete_filename_list)>0:
