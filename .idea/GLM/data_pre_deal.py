@@ -674,7 +674,7 @@ one_hot_style_90days={"database":"GLM_base_date_90Days",#数据库
                       "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
                                    "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
                                    "maxspeed":[(0.0,24.0),(24.0,48.0),(48.0,72.0),(72.0,96.0),(96.0,120.0)],
-                                   "a":[(0.0,10.0),(10.0,20.0),(30.0,40.0),(40.0,1000000.0)],
+                                   "a":[(0.0,10.0),(10.0,20.0),(20.0,30.0),(30.0,40.0),(40.0,1000000.0)],
                                    "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
                                    "isf":[(0.0,2.5),(2.5,100000)],
                                    "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
@@ -725,8 +725,8 @@ def date2sas_day(one_hot_style=one_hot_style_90days,pei_or_time="pei"):
    print(query)
    mapd_cursor.execute(query)
 
-date2sas_day(one_hot_style=one_hot_style_90days,pei_or_time="pei")
-exit()
+# date2sas_day(one_hot_style=one_hot_style_90days,pei_or_time="pei")
+# exit()
 #--------------处理sas数据集结束---------------------------------------------
 #非sas使用的数据集
 #根据指标名称生成相应的onehot的sql代码
@@ -819,9 +819,11 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
     to_txt= "att_modle_risk:risk"+"\n"\
            +"att_modle_nh:constant,"+att_text+"\n" \
            +"att_modle_base:"+",".join(car_base_list)+"\n"\
-           +"pei:claims_use\n"
+           +"pei:claims_use\n+" \
+           +"weight:"+",".join([str(int(e)) for e in risk_num])
 
     write2txt("/home/mapd/dumps/output/att_name.txt",to_txt)
+    exit()
     #计算基准车基指标结束-----------------------------------------------
     if group_avg==False:#不求平均
         print(" group_avg==False")
@@ -867,14 +869,14 @@ delete_filename_list=["month_201608","month_201609"
 delete_filename_list=[]
 
 #90天非对称版：使用
-if len(delete_filename_list)>0:
-   pitch_delete(delete_file_list=delete_filename_list)
-create_csv2table(imput_file_style=imput_file_90_style,if_clear=True,if_input=[1,0,0])#medie为中间
-add_date(date_list_style=date_list_90_style)#medie为中间文件
-when_case_risk_range(when_case_style=when_case_style_90day)#medie为中间文件
-pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_90_style,if_deal_pei=False)
-save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='88.0',seg_range='90Days',mismatching=False)
-# value2one_hot(one_hot_style=one_hot_style_90days,group_avg=False)
+# if len(delete_filename_list)>0:
+#    pitch_delete(delete_file_list=delete_filename_list)
+# create_csv2table(imput_file_style=imput_file_90_style,if_clear=True,if_input=[1,0,0])#medie为中间
+# add_date(date_list_style=date_list_90_style)#medie为中间文件
+# when_case_risk_range(when_case_style=when_case_style_90day)#medie为中间文件
+# pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_90_style,if_deal_pei=False)
+#save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='88.0',seg_range='90Days',mismatching=False)
+value2one_hot(one_hot_style=one_hot_style_90days,group_avg=False)
 
 #30天对齐版：使用claim_t(对齐)或者claim_use(对齐)
 # if len(delete_filename_list)>0:
