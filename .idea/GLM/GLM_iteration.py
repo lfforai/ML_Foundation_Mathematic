@@ -1,4 +1,5 @@
 #使用迭代法求解GLM模型参数,未计算检验参数，相关参数可以通过sas做检验效率更高
+#目前迭代法的效率远高于
 import csv
 import tensorflow as tf
 import numpy as np
