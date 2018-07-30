@@ -82,10 +82,10 @@ def main():
     # with tf.device('/gpu:0'):
         arr_len_sum=27
         learning_rate=1
-        learning_rate_1=0.1
-        learning_rate_2=0.01
+        learning_rate_1=0.01
+        learning_rate_2=0.001
         filenames=['/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv']
-        batch_size=500
+        batch_size=3000
         num_epochs=None
         y_batch,weight_batch,x_batch=input_pipeline_csv(filenames, batch_size=batch_size, num_epochs=num_epochs)
         global_step =tf.Variable(0,trainable=False)
