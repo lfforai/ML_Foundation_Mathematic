@@ -34,6 +34,13 @@ def total_menory():
 
 print("是否可以使用GPU：",is_gpu_available(cuda_only=False))
 
+def write2txt(txtName = "codingWord.txt",des_txt=""):
+    import os
+    with open(txtName,"w") as f:
+        f.write(des_txt)
+        f.close()
+
+
 
 #将csv文件导入到mapd中去进行处理
 dbname = 'mapd'
@@ -668,8 +675,101 @@ def save2use(GLM_need_att_style=GLM_need_att_style,all_risk='15.0',limit_risk='1
          print("--------------------------")
 
 #6、把指定指标分段并离散化为（1,0,0,0）的onehot类型
+
+#----------------------------分析连续指标切割区间用---------------------------------------------
+one_hot_style_90days_test={"database":"GLM_base_date_90Days",
+                           "sort_by":"mileage,duration,maxspeed,a,d,isf,ish,isn",
+                           "select_colums":"sum(ispei) as ispei,count(*) as record,avg(claims_use) as claims",
+                           "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
+                                        "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
+                                        "maxspeed":[(0.0,24.0),(24.0,48.0),(48.0,72.0),(72.0,96.0),(96.0,120.0)],
+                                        "a":[(0.0,10.0),(10.0,20.0),(20.0,30.0),(30.0,40.0),(40.0,1000000.0)],
+                                        "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
+                                        "isf":[(0.0,2.5),(2.5,100000)],
+                                        "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
+                                        "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
+                                        }
+                          }
+
+def test_onehot_sastxt(dict_n=[],key="mileage"):
+    str_list=[]#记录case when
+    att_list=[]#记录指标 ”a_1,a_2,a_3“
+    len_atrr=dict_n.__len__()
+    i=0
+    for e in dict_n:
+        if i==0:
+            att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
+            if str(int(e[0]))!=str(int(e[1])):
+               str_list.append("case when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
+            else:
+               str_list.append("case when "+key+"="+str(e[0])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
+        else:
+            if i!=len_atrr-1:#最后一项
+                att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
+                if str(int(e[0]))!=str(int(e[1])):
+                   str_list.append("when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
+                else:
+                   str_list.append("when "+key+"="+str(e[0])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
+            else:
+                att_list.append(key+"_"+str(int(e[0]))+"_g")
+                str_list.append("when "+key+">="+str(e[0])+" then "+'\''+key+"_"+str(int(e[0]))+"_g"+"\' else  \'wrong\'"+" end  as "+key)
+        i=i+1
+    i=0
+    for i in range(str_list.__len__()-1):
+
+        str_list
+    str_list_n=[]
+    [str_list_n.append(i) for i in str_list if not i in str_list_n]
+    att_list_n=[]
+    [att_list_n.append(i) for i in att_list if not i in att_list_n]
+    sql_text=str("".join(str_list_n))
+    att_text=str(",".join(att_list_n))
+    return sql_text,att_text
+
+#测试应该指标应该被分为几组(按分位数进行分组)
+def test_onehot_dv(one_hot_style_test=one_hot_style_90days_test,file_road="/home/mapd/dumps/att_test/",cut_num=5):#函数用于将制定数据库下指定指标按一定规则进行分组，查看分组效果
+    #首先计算分位数
+    text_list=""
+    temp_list=one_hot_style_test["sort_by"].split(",")
+    for key in temp_list:
+        mapd_cursor.execute("select "+key+" from GLM_base_date_90Days")
+        results = mapd_cursor.fetchall()
+        df = pandas.DataFrame(results,columns=[key])
+        #根据需要切割的段数生成分位数
+        min_n=df[key].min()
+        base_num=1.0/cut_num
+        list_q=[]#存放在该指标下的分组情况[(),(),()]
+        for i in range(int(cut_num)):
+            if i==0:
+               min_value=min_n
+               max_value=df[key].quantile((i+1)*base_num)
+               list_q.append((min_value,max_value))
+               min_value=max_value
+            else:
+               max_value=df[key].quantile((i+1)*base_num)
+               list_q.append((min_value,max_value))
+               min_value=max_value
+
+        list_q_n=[]
+        [list_q_n.append(i) for i in list_q if not i in list_q_n]
+        sql_n,text_n=test_onehot_sastxt(dict_n=list_q_n,key=key)
+        mapd_cursor.execute("select "+one_hot_style_test["select_colums"]+","+sql_n+" from GLM_base_date_90Days group by "+key)
+        results = mapd_cursor.fetchall()
+        df = pandas.DataFrame(results)
+        text=str(df)+"\n"+"att_range:"+str(list_q_n)+'\n'+"att_name:"+text_n+"\n"\
+             +"------------------------------ \n"
+        print(text)
+        text_list=text_list+text
+        write2txt(txtName = "/home/mapd/dumps/att_range/赔付最大化/att_range.txt",des_txt=text_list)
+    return 0
+
+# test_onehot_dv()#按分位数法对指标进行切割并输出结果到/home/mapd/dumps/att_range/赔付最大化/att_range.txt
+# exit()
+#----------------------------分析连续指标切割区间用结束-------------------------------------------------
+
+#按赔付最大设置的区间
 one_hot_style_90days={"database":"GLM_base_date_90Days",#数据库
-                      "att_pei":"claims_use,time_use"  ,
+                      "att_pei":"claims_use,time_use",
                       "att_car":"mileage,duration,maxspeed,a,d,isf,ish,isn",                      #指标
                       "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
                                    "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
@@ -678,7 +778,22 @@ one_hot_style_90days={"database":"GLM_base_date_90Days",#数据库
                                    "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
                                    "isf":[(0.0,2.5),(2.5,100000)],
                                    "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
-                                   "isn":((0.0,0.05),(0.05,10000))#只判断有无夜间驾驶
+                                   "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
+                                   }
+                      }
+
+#按每组中样本数量接近设置的区间，数据来自/home/mapd/dumps/att_range/赔付最大化/
+one_hot_style_90days_quantile={"database":"GLM_base_date_90Days",#数据库
+                      "att_pei":"claims_use,time_use",
+                      "att_car":"mileage,duration,maxspeed,a,d,isf,ish,isn",                      #指标
+                      "att_range":{"mileage":[(0.0, 1958.6648681640627), (1958.6648681640627, 2947.1868164062503), (2947.1868164062503, 4052.9232421875), (4052.9232421875, 5776.8951171875015), (5776.8951171875015, 69126.1796875)],
+                                   "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
+                                   "maxspeed":[(0.0, 39.78222351074219), (39.78222351074219, 53.344445800781244), (53.344445800781244, 63.599995930989586), (63.599995930989586, 74.33333333333333), (74.33333333333333, 225.5888875325521)],
+                                   "a":[(0.0, 0.0), (0.0, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 2812.0)],
+                                   "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 83.0), (83.0, 171.0), (171.0, 6577.0)],
+                                   "isf":[(0.0, 0.0), (1.0, 2.0), (2.0, 89.0)],
+                                   "ish":[(0.0, 2.0), (2.0, 5.0), (5.0, 9.0), (9.0, 17.0), (17.0, 90.0)],
+                                   "isn":[(0.0, 0.5), (0.5, 15.0)]#只判断有无夜间驾驶
                                    }
                       }
 
@@ -693,12 +808,13 @@ def one_hot_sastxt(dict_n=one_hot_style_90days["att_range"],key="mileage"):
         if i==0:
            att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
            str_list.append("case when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
-        if i!=len_atrr-1:#最后一项
-            att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
-            str_list.append("when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
         else:
-           att_list.append(key+"_"+str(int(e[0]))+"_g")
-           str_list.append("when "+key+">="+str(e[0])+" then "+'\''+key+"_"+str(int(e[0]))+"_g"+"\' else  \'wrong\'"+" end  as "+key)
+            if i!=len_atrr-1:#最后一项
+                att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
+                str_list.append("when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then "+'\''+key+"_"+str(int(e[0]))+"_"+str(int(e[1]))+"\' ")
+            else:
+               att_list.append(key+"_"+str(int(e[0]))+"_g")
+               str_list.append("when "+key+">="+str(e[0])+" then "+'\''+key+"_"+str(int(e[0]))+"_g"+"\' else  \'wrong\'"+" end  as "+key)
         i=i+1
     sql_text=str("".join(str_list))
     att_text=str(",".join(att_list))
@@ -727,6 +843,8 @@ def date2sas_day(one_hot_style=one_hot_style_90days,pei_or_time="pei"):
 
 # date2sas_day(one_hot_style=one_hot_style_90days,pei_or_time="pei")
 # exit()
+
+
 #--------------处理sas数据集结束---------------------------------------------
 #非sas使用的数据集
 #根据指标名称生成相应的onehot的sql代码
@@ -736,10 +854,12 @@ def one_hot_sqltxt(dict_n=one_hot_style_90days["att_range"],key="mileage"):
     i=0
     len_atrr=dict_n[key].__len__()
     for e  in dict_n[key]:
-
         if i!=len_atrr-1:#最后一项
            att_list.append(key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
-           str_list.append("case when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then 1.0 else 0.0 end as "+key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
+           if str(int(e[0]))!=str(int(e[1])):
+              str_list.append("case when "+key+">="+str(e[0])+" and "+key+"<"+str(e[1])+" then 1.0 else 0.0 end as "+key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
+           else:
+              str_list.append("case when "+key+"="+str(e[0])+" then 1.0 else 0.0 end as "+key+"_"+str(int(e[0]))+"_"+str(int(e[1])))
         else:
            str_list.append("case when "+key+">="+str(e[0])+" then 1.0 else 0.0 end as "+key+"_"+str(int(e[0]))+"_g")
            att_list.append(key+"_"+str(int(e[0]))+"_g")
@@ -748,19 +868,13 @@ def one_hot_sqltxt(dict_n=one_hot_style_90days["att_range"],key="mileage"):
     att_text=str(",".join(att_list))
     return sql_text,att_text
 
-def write2txt(txtName = "codingWord.txt",des_txt=""):
-    import os
-    with open(txtName,"w") as f:
-        f.write(des_txt)
-        f.close()
-
 #设置需要进行拟合的数据，并转换为one_hot(1,0,0)的形式,pei_or_time=是赔付还是次数,group_avg是否需要按车基属性进行一次group求平均
-def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg=True):
+def value2one_hot(one_hot_style=one_hot_style_90days_quantile,pei_or_time="pei",group_avg=True):
     str_list=[]#记录case when
     att_list=[]#记录指标 ”a_1,a_2,a_3“
-    value_car_list=one_hot_style_90days["att_car"].split(",")
+    value_car_list=one_hot_style["att_car"].split(",")
     for e in value_car_list:
-        a,b=one_hot_sqltxt(dict_n=one_hot_style_90days["att_range"],key=e)
+        a,b=one_hot_sqltxt(dict_n=one_hot_style["att_range"],key=e)
         str_list.append(a)
         att_list.append(b)
     sql_text=str(",".join(str_list))
@@ -787,6 +901,8 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
     #所有用于建立GLM模型的车基指标名称（分段后的）
     columns_name=",".join(att_list).split(",")
     print("所有用于建立GLM模型的车基指标名称（分段后的）:",columns_name)
+    columns_name_temp=columns_name.copy()#保留输出用
+    print(columns_name_temp)
     #每段数据的风险暴露数
     query="select "+",".join(list(map(lambda x:"sum("+x+") as "+x,",".join(att_list).split(","))))+" from GLM_base_date_90Days_temp"
     mapd_cursor.execute(query)
@@ -817,10 +933,12 @@ def value2one_hot(one_hot_style=one_hot_style_90days,pei_or_time="pei",group_avg
 
     #把参数写入到txt文档中，供tensorflow使用
     to_txt= "att_modle_risk:risk"+"\n"\
+           +"att_model_all:"+",".join(columns_name_temp)+"\n"\
            +"att_modle_nh:constant,"+att_text+"\n" \
            +"att_modle_base:"+",".join(car_base_list)+"\n"\
            +"pei:claims_use\n+" \
-           +"weight:"+",".join([str(int(e)) for e in risk_num])
+           +"weight:"+",".join([str(int(e)) for e in risk_num])+"\n"\
+           +"att_num:"+str(columns_name.__len__()+1)
 
     write2txt("/home/mapd/dumps/output/att_name.txt",to_txt)
     #计算基准车基指标结束-----------------------------------------------
@@ -867,7 +985,18 @@ delete_filename_list=["month_201609",
                       "month_201610_base"]
 delete_filename_list=[]
 
-#90天非对称版：使用
+
+#90天非对称版：使用,用分位数法分组
+# if len(delete_filename_list)>0:
+#    pitch_delete(delete_file_list=delete_filename_list)
+# create_csv2table(imput_file_style=imput_file_90_style,if_clear=True,if_input=[1,0,0])#medie为中间
+# add_date(date_list_style=date_list_90_style)#medie为中间文件
+# when_case_risk_range(when_case_style=when_case_style_90day)#medie为中间文件
+# pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_90_style,if_deal_pei=False)
+# save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='88.0',seg_range='90Days',mismatching=False)
+value2one_hot(one_hot_style=one_hot_style_90days_quantile,pei_or_time="pei",group_avg=True)
+
+#90天非对称版：使用，用赔付法分组
 # if len(delete_filename_list)>0:
 #    pitch_delete(delete_file_list=delete_filename_list)
 # create_csv2table(imput_file_style=imput_file_90_style,if_clear=True,if_input=[1,0,0])#medie为中间
