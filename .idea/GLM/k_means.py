@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 import GLM_iteration
 import random
+import data_pre_deal
 
 #此聚类算法只用来做单因子聚类means_group_num预先设置的聚类种类
 def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_num=5,row_size=4000,step=5):
@@ -46,7 +47,6 @@ def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_
          point_sess=sess.run(point)
          sess.close()
     #--------------init 结束------------
-
     #--计算每个分组内部的中心距离，也就是所有点的质心=avg（所有点）
     def re_divide(point_sess=point_sess,means_group=means_group,u_vs_y=u_vs_y):
         #计算point中每组的质心
@@ -94,12 +94,30 @@ def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_
 #基于tensorflow的k_means,model_tpye="posssion" or "tweedie"
 def k_means(filename="",parameter=[],model_type="tweedie",step_model=15,step_k_means=50):
     #计算参数
+    #读取有多少个参数
+    info_n={"att_modle_risk":"","att_model_all":"","att_modle_nh":"","att_modle_base":"","pei":"","weight":"","att_num":""}
+    f = open("/home/mapd/dumps/output/att_name.txt")             # 返回一个文件对象
+    line = f.readline()
+    # print(line.split(":")[0])
+    info_n[line.split(":")[0]]=line.split(":")[1]
+    # print(info_n[line.split(":")[0]])
+    i=1
+    while line and i<7:
+        line = f.readline()
+        # print(line.split(":")[0])
+        info_n[line.split(":")[0]]=line.split(":")[1]
+        # print(info_n[line.split(":")[0]])
+        i=i+1
+    f.close()
+    colums_num=int(info_n["att_num"])
+    print("参数个数:=",colums_num)
+
     g=tf.Graph()
     #计算参数GLM模型参数
     if model_type=="tweedie":
-       b_1=GLM_iteration.train_tweedie_model2b_1(filename="/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv",arr_len_sum=GLM_iteration.row_num,loop_times=step_model)
+       b_1=GLM_iteration.train_tweedie_model2b_1(filename="/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv",arr_len_sum=colums_num,loop_times=step_model)
     if model_type=="possion":
-       b_1=GLM_iteration.train_possion_model2b_1(filename="/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv",arr_len_sum=GLM_iteration.row_num,loop_times=step_model)
+       b_1=GLM_iteration.train_possion_model2b_1(filename="/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv",arr_len_sum=colums_num,loop_times=step_model)
     print("GLM模型参数：",b_1)
     y,w,x=GLM_iteration.readcsv(filename="/home/mapd/dumps/output/GLM_base_date_90Days_one_hot.csv")
     row_size=y.shape[0]#总共有多少样本
@@ -119,7 +137,6 @@ def k_means(filename="",parameter=[],model_type="tweedie",step_model=15,step_k_m
          print("系数：=",np.exp(np.array(b_1)))
          print("-----风险暴露数-----")
          print(df.groupby('group_id')['w'].sum())
-
          print("-----按分组数据差异差异-------")
          print(df.groupby('group_id')['sum_y_GLM'].sum()/df.groupby('group_id')['w'].sum())
          print(df.groupby('group_id')['sum_y_real'].sum()/df.groupby('group_id')['w'].sum())

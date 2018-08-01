@@ -25,13 +25,13 @@ print(line.split(":")[0])
 info_n[line.split(":")[0]]=line.split(":")[1]
 print(info_n[line.split(":")[0]])
 i=1
-while line and i<6:
+while line and i<7:
     line = f.readline()
     print(line.split(":")[0])
     info_n[line.split(":")[0]]=line.split(":")[1]
     print(info_n[line.split(":")[0]])
     i=i+1
 f.close()
-print(info_n)
+# print(info_n)
 
-print("constant,mileage_1958_2947,mileage_2947_4052,mileage_4052_5776,mileage_5776_g,duration_268806_383555,duration_383555_505016,duration_505016_684012,duration_684012_g,maxspeed_0_39,maxspeed_39_53,maxspeed_53_63,maxspeed_63_74,a_0_0,a_3_9,a_9_27,a_27_g,d_0_20,d_20_44,d_83_171,d_171_g,isf_1_2,isf_2_g,ish_0_2,ish_2_5,ish_5_9,ish_17_g,isn_0_g".split(",").__len__())
+# print("mileage_0_1971,mileage_1971_2957,mileage_2957_4063,mileage_4063_5781,mileage_5781_g,maxspeed_0_39,maxspeed_39_53,maxspeed_53_63,maxspeed_63_74,maxspeed_74_g,a_0_0,a_0_3,a_3_9,a_9_27,a_27_g,d_0_20,d_20_44,d_44_83,d_83_171,d_171_g,isf_0_0,isf_0_1,isf_1_3,isf_3_g,ish_0_2,ish_2_7,ish_7_13,ish_13_25,ish_25_g,isn_0_0,isn_0_g".split(",").__len__())
