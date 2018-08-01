@@ -1070,7 +1070,38 @@ delete_filename_list=["month_201606","month_201607","month_201608","month_201609
 #when_case_risk_range(when_case_style=when_case_style_30day)#medie为中间文件
 #pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_style,if_deal_pei=False)
 #save2use(GLM_need_att_style=GLM_need_att_style,all_risk='30.0',limit_risk='29.0',seg_range='30Days',mismatching=True)
-value2one_hot(one_hot_style=one_hot_style_90days,group_avg=True)
+one_hot_style_30days_quantile={"database":"GLM_base_date_90Days",#数据库
+                               "att_pei":"claims_use,time_use",
+                               "att_car":"mileage,duration,maxspeed,a,d,isf,ish,isn",                      #指标
+                               "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
+                                            "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
+                                            "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
+                                            "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
+                                            "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
+                                            "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
+                                            "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
+                                            "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
+                                            },
+                               "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
+                               "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
+                               }
+
+one_hot_style_30days_test={"database":"GLM_base_date_90Days",
+                           "sort_by":"mileage,duration,maxspeed,a,d,isf,ish,isn",
+                           "select_colums":"sum(ispei) as ispei,count(*) as record,avg(claims_use) as claims",
+                           "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
+                                        "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
+                                        "maxspeed":[(0.0,24.0),(24.0,48.0),(48.0,72.0),(72.0,96.0),(96.0,120.0)],
+                                        "a":[(0.0,10.0),(10.0,20.0),(20.0,30.0),(30.0,40.0),(40.0,1000000.0)],
+                                        "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
+                                        "isf":[(0.0,2.5),(2.5,100000)],
+                                        "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
+                                        "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
+                                        }
+                           }
+dict_ex=test_onehot_dv(one_hot_style_test=one_hot_style_30days_test,file_road="/home/mapd/dumps/att_test/",cut_num=5,cut_vector=[])#按分位数法对指标进行切割并输出结果到/home/mapd/dumps/att_range/赔付最大化/att_range.txt
+one_hot_style_30days_quantile["att_range"]=dict_ex
+value2one_hot(one_hot_style=one_hot_style_30days_quantile,group_avg=True)
 
 
 # #15天对齐版：使用claim_t(对齐)或者claim_use
