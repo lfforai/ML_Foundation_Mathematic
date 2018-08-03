@@ -43,7 +43,9 @@ def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_
     group_u=tf.map_fn(map_func,abs_temp)#
     #point=[u,y,group_id]
     point=tf.concat([u_vs_y,tf.reshape(group_u,[-1,1])],axis=1)#已经为每个u分好类别了
-    with tf.Session() as sess:#计算出结果以后再进行筛选
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:#计算出结果以后再进行筛选
          point_sess=sess.run(point)
          sess.close()
     #--------------init 结束------------

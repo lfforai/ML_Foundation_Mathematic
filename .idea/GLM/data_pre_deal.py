@@ -1178,7 +1178,7 @@ def Day_90_fun():
     #divide_driveday(one_hot_style=one_hot_style_90days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
     one_hot_style_90days_quantile={"database":"GLM_base_date_90Days",#数据库
                                    "att_pei":"claims_use,time_use",
-                                   "att_car":"mileage,maxspeed,a,d,isf,ish,isn",                      #指标
+                                   "att_car":"duration,maxspeed,a,d,isf,ish,isn",                      #指标
                                    "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
                                                 "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
                                                 "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
@@ -1193,7 +1193,7 @@ def Day_90_fun():
                                    }
     #随机选择一组可以赋值给one_hot_style_30days_quantile[ "att_range"]的区间
     def choice_att_range(one_hot_style=one_hot_style_90days_quantile,att_file="/home/mapd/dumps/att_range/30Days_att.txt"):
-        keys=one_hot_style_30days_quantile["att_car"].split(",")
+        keys=one_hot_style["att_car"].split(",")
         values=[""]*keys.__len__()
         key_value_dict=dict(list(zip(keys,values)))
 
@@ -1202,6 +1202,7 @@ def Day_90_fun():
         line="start"
         while line:
             line = f.readline()
+            # print(line)
             if line.__eq__("end"):
                 break
             temp_list=line.split("|")
@@ -1209,6 +1210,7 @@ def Day_90_fun():
             if keys.__contains__(key_n):
                 key_value_dict[key_n]=key_value_dict[key_n]+"|"+str(temp_list[1].split(":")[1])
         f.close()
+
 
         for e in key_value_dict:
             temp_li=key_value_dict[e].split("|")
@@ -1219,7 +1221,6 @@ def Day_90_fun():
     choice_att_range_value=choice_att_range(one_hot_style=one_hot_style_90days_quantile,att_file="/home/mapd/dumps/att_range/90Days_att.txt")
     one_hot_style_90days_quantile["att_range"]=choice_att_range_value
     value2one_hot(one_hot_style=one_hot_style_90days_quantile,group_avg=True,pei_or_time="pei",day_mark='90Days')
-
 
 #90天非对称版：使用,用分位数法分组
 # if len(delete_filename_list)>0:
@@ -1289,14 +1290,14 @@ def Day_30_att_random():
                                #              "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
                                #              }
                                }
-    test_onehot_dv_file(one_hot_style_test=one_hot_style_30days_test,days_mark="30Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=15)
+    test_onehot_dv_file(one_hot_style_test=one_hot_style_30days_test,days_mark="30Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=10)
 
 
 def Day_30_fun():
     #divide_driveday(one_hot_style=one_hot_style_30days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
     one_hot_style_30days_quantile={"database":"GLM_base_date_30Days",#数据库
                                    "att_pei":"claims_use,time_use",
-                                   "att_car":"mileage,maxspeed,a,d,isf,ish,isn",                      #指标
+                                   "att_car":"duration,maxspeed,a,d,isf,ish,isn",                      #指标
                                    "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
                                                 "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
                                                 "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
@@ -1311,7 +1312,7 @@ def Day_30_fun():
                                    }
     #随机选择一组可以赋值给one_hot_style_30days_quantile[ "att_range"]的区间
     def choice_att_range(one_hot_style=one_hot_style_30days_quantile,att_file="/home/mapd/dumps/att_range/30Days_att.txt"):
-        keys=one_hot_style_30days_quantile["att_car"].split(",")
+        keys=one_hot_style["att_car"].split(",")
         values=[""]*keys.__len__()
         key_value_dict=dict(list(zip(keys,values)))
 
