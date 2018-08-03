@@ -17,7 +17,16 @@ import data_pre_deal
 import k_means
 
 #数据预处理
-for i in range(100):
-    if i>88:
-       data_pre_deal.Day_30_fun()
-       k_means.k_means(model_type="tweedie",day_mark="30Days",step_model=6,step_k_means=10,inputfilename="",save_filename="/home/mapd/dumps/result/tweedie_30Days/result_"+str(i)+".txt")
+# for i in range(100):
+#     if i>88:
+#        data_pre_deal.Day_30_fun()
+#        k_means.k_means(model_type="tweedie",day_mark="30Days",step_model=6,step_k_means=10,inputfilename="",save_filename="/home/mapd/dumps/result/tweedie_30Days/result_"+str(i)+".txt")
+
+# for i in range(100):
+#     if i>88:
+#        data_pre_deal.Day_30_fun()
+#        k_means.k_means(model_type="tweedie",day_mark="30Days",step_model=6,step_k_means=10,inputfilename="",save_filename="/home/mapd/dumps/result/tweedie_30Days/result_"+str(i)+".txt")
+
+
+#data_pre_deal.Day_90_basedata_run(all_risk='90.0',limit_risk='88.0',seg_range='90Days')
+data_pre_deal.Day_90_att_random()

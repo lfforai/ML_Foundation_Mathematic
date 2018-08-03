@@ -1158,7 +1158,7 @@ def Day_90_basedata_run(all_risk='90.0',limit_risk='88.0',seg_range='90Days'):
     divide_driveday(one_hot_style=one_hot_style_90days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
 
 def Day_90_att_random():
-    one_hot_style_30days_test={"database":"GLM_base_date_90Days",
+    one_hot_style_90days_test={"database":"GLM_base_date_90Days",
                                "sort_by":"mileage,duration,maxspeed,a,d,isf,ish,isn",
                                "select_colums":"sum(ispei) as ispei,count(*) as record,avg(claims_use) as claims",
                                # "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
@@ -1171,7 +1171,7 @@ def Day_90_att_random():
                                #              "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
                                #              }
                                }
-    test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="90Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=15)
+    test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="90Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=25)
 
 
 def Day_90_fun():
