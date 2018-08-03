@@ -34,7 +34,10 @@ def tweedie_model(y=np.zeros(1),w=np.zeros(1),x=np.zeros(1),arr_len_sum=row_num,
         w=tf.cast(tf.convert_to_tensor(np.array(w,dtype=float)),dtype=tf.float32)
         x=tf.cast(tf.convert_to_tensor(np.array(x,dtype=float)),dtype=tf.float32)
         w_eye=tf.eye(len)*w
-    with tf.Session(graph=g) as sess:
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(graph=g,config=config) as sess:
         #计算出y的均值，用来替换缩小初始值的大小，避免出现非奇异矩阵
         init_constant=tf.log(tf.reduce_mean(y))
         b_1=np.random.normal(size=[arr_len_sum])/5.0#除了常数项以外,其余项比较小
@@ -76,7 +79,10 @@ def possion_model(y=np.zeros(1),w=np.zeros(1),x=np.zeros(1),arr_len_sum=row_num,
         w=tf.cast(tf.convert_to_tensor(np.array(w,dtype=float)),dtype=tf.float32)
         x=tf.cast(tf.convert_to_tensor(np.array(x,dtype=float)),dtype=tf.float32)
         w_eye=tf.eye(len)*w
-    with tf.Session(graph=g) as sess:
+
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(graph=g,config=config) as sess:
         #计算出y的均值，用来替换缩小初始值的大小，避免出现非奇异矩阵
         init_constant=tf.log(tf.reduce_mean(y))
         b_1=np.random.normal(size=[arr_len_sum])/5.0#除了常数项以外,其余项比较小

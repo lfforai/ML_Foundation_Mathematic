@@ -34,13 +34,21 @@ def total_menory():
 
 print("是否可以使用GPU：",is_gpu_available(cuda_only=False))
 
-def write2txt(txtName = "codingWord.txt",des_txt=""):
+def write2txt(txtName = "codingWord.txt",des_txt="",att='w'):
     import os
-    with open(txtName,"w") as f:
+    if att=='a':
+       if os.path.exists(txtName):
+          pass
+       else:
+          with open(txtName,'w') as f:
+               f.write(des_txt)
+               f.close()
+               return 0
+
+    with open(txtName,att) as f:
         f.write(des_txt)
         f.close()
-
-
+    return 0
 
 #将csv文件导入到mapd中去进行处理
 dbname = 'mapd'
@@ -757,11 +765,13 @@ def test_onehot_sastxt(dict_n=[],key="mileage"):
     att_text=str(",".join(att_list_n))
     return sql_text,att_text
 
-#测试应该指标应该被分为几组(按分位数进行分组) cut_vector=[]手动设置分位数点,file_road是存放结果的文件
-def test_onehot_dv(one_hot_style_test=one_hot_style_90days_test,days_mark="30Days",file_road="/home/mapd/dumps/att_range/赔付最大化/att_range.txt",cut_num=5,cut_vector=[],key_index=""):#函数用于将制定数据库下指定指标按一定规则进行分组，查看分组效果
+#测试应该指标应该被分为几组(按分位数进行分组) cut_vector=[]手动设置分位数点,file_road是存放详细结果的文件
+def test_onehot_dv(one_hot_style_test=one_hot_style_90days_test,days_mark="30Days",file_road_every="/home/mapd/dumps/att_range/"\
+                   ,cut_num=5,cut_vector=[],key_index=""):#函数用于将制定数据库下指定指标按一定规则进行分组，查看分组效果
     #首先计算分位数
     result={}
     text_list=""
+    text_list_part=""
     temp_list=one_hot_style_test["sort_by"].split(",")
 
     if key_index=="":#遍历所有的属性
@@ -801,15 +811,47 @@ def test_onehot_dv(one_hot_style_test=one_hot_style_90days_test,days_mark="30Day
             mapd_cursor.execute("select "+one_hot_style_test["select_colums"]+","+sql_n+" from GLM_base_date_"+days_mark+" group by "+key)
             results = mapd_cursor.fetchall()
             df = pandas.DataFrame(results)
-            text=str(df)+"\n"+"att_range:"+str(list_q_n)+'\n'+"att_name:"+text_n+"\n"\
+
+            #剔除在dataframe group by以后没有出现过的分组
+            stand_list=[e  for e in  df[3]]
+            # print("stand_list:",stand_list)
+            #
+            text_list_old=text_n.split(",")
+            text_list_new=[]
+            list_q_n_new=[]
+            for i in range(list_q_n.__len__()):
+                if stand_list.__contains__(text_list_old[i]):
+                    text_list_new.append(text_list_old[i])
+                    list_q_n_new.append(list_q_n[i])
+            list_q_n=list_q_n_new
+            text_list_old=text_list_new
+            #对不封闭的区间进行调整为封闭区间(0.0, 0.0), (3.3333334922790527, 7.692307949066162) 调整为(0.0, 3.3333334922790527), (3.3333334922790527, 7.692307949066162)
+            for i in range(list_q_n.__len__()-1):
+                if  list_q_n[i][1]!=list_q_n[i+1][0]:
+                    list_q_n[i]=(list_q_n[i][0],list_q_n[i+1][0])
+                    temp_list_1=text_list_old[i].split("_")
+                    temp_list_2=text_list_old[i+1].split("_")
+                    temp_list_1[2]=temp_list_2[1]
+                    text_list_old[i]="_".join(temp_list_1)
+            text_n=",".join(text_list_old)
+
+            text=str(df)+"\n"+"att_key:"+key+"|"+"att_range:"+str(list_q_n)+'|'+"att_name:"+text_n+"\n"\
                  +"------------------------------ \n"
             result[key]=list_q_n
-            print(text)
+            # print(text)
+            # print("text_list_old:",text_list_old)
+            text_list_part=text_list_part+"att_key:"+key+"|"+"att_range:"+str(list_q_n)+'|'+"att_name:"+text_n+"\n"
             text_list=text_list+text
-    write2txt(txtName=file_road,des_txt=text_list)
+    # print(text_list_part)
+    # print(text_list)
+    write2txt(txtName=file_road_every+days_mark+"_att.txt",des_txt=text_list_part,att='a')
+    # print(file_road_every+days_mark+"_att.txt")
+    write2txt(txtName=file_road_every+days_mark+"_all.txt",des_txt=text_list,att="a")
+    # print(file_road_every+days_mark+"_all.txt")
     return result
 
-def test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="30Days",file_road="/home/mapd/dumps/att_range/all/att",rang_num=15):
+#测试可以使用的参数
+def test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="30Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=15):
     cut_num=5
     cut_vector=[]
     key_index=""
@@ -840,13 +882,13 @@ def test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="
     #第一次循环先按平均分位数
     cut_num_list=[3,4,5,6]
     for e in cut_num_list:
-        test_onehot_dv(one_hot_style_test=one_hot_style_test,days_mark=days_mark,file_road=file_road+"_cutavg_"+str(e)+".txt",cut_num=e,cut_vector=[],key_index="")
+        test_onehot_dv(one_hot_style_test=one_hot_style_test,days_mark=days_mark,file_road_every=file_road_every,cut_num=e,cut_vector=[],key_index="")
 
     #第二次按照cut_vector设定的比例来进行分割
     for e in cut_num_list:
         for i in range(rang_num):
             temp_list=random_range(num=e)
-            test_onehot_dv(one_hot_style_test=one_hot_style_test,days_mark=days_mark,file_road=file_road+"_cut_"+str(e)+"_num_"+str(i)+".txt",cut_num=5,cut_vector=temp_list,key_index="")
+            test_onehot_dv(one_hot_style_test=one_hot_style_test,days_mark=days_mark,file_road_every=file_road_every,cut_num=5,cut_vector=temp_list,key_index="")
     return 0
 #----------------------------分析连续指标切割区间用结束-------------------------------------------------
 
@@ -1069,35 +1111,114 @@ def value2one_hot(one_hot_style=one_hot_style_90days_quantile,day_mark='30Days',
     return att_text
 
 # 三、执行数据预计处理,不执行的步骤用#标记后跳过（代码的执行顺序不能乱）
-delete_filename_list=["month_201606_temp","month_201607_temp","month_201608_temp","month_201609_temp",
-                      "month_201610_temp","month_201611_temp","month_201606_l","month_201607_l","month_201608_l","month_201609_l",
-                      "month_201610_l","month_201611_l","month_201606","month_201607","month_201608","month_201609",
-                      "month_201610","month_201611","month_201606_temp_use","month_201607_temp_use","month_201608_temp_use","month_201609_temp_use",
-                      "month_201610_temp_use","month_201611_temp_use"]
-
-delete_filename_list=[]
-delete_filename_list=["month_201606","month_201607","month_201608","month_201609",
-                      "month_201610","month_201611","month_201606_base","month_201607_base","month_201608_base","month_201609_base",
-                      "month_201610_base","month_201611_base"]
-
+# delete_filename_list=["month_201606_temp","month_201607_temp","month_201608_temp","month_201609_temp",
+#                       "month_201610_temp","month_201611_temp","month_201606_l","month_201607_l","month_201608_l","month_201609_l",
+#                       "month_201610_l","month_201611_l","month_201606","month_201607","month_201608","month_201609",
+#                       "month_201610","month_201611","month_201606_temp_use","month_201607_temp_use","month_201608_temp_use","month_201609_temp_use",
+#                       "month_201610_temp_use","month_201611_temp_use"]
+#
 # delete_filename_list=[]
-delete_filename_list=["month_201608","month_201609",
-                      "month_201610","month_201608_base","month_201609_base",
-                      "month_201610_base"]
+# delete_filename_list=["month_201606","month_201607","month_201608","month_201609",
+#                       "month_201610","month_201611","month_201606_base","month_201607_base","month_201608_base","month_201609_base",
+#                       "month_201610_base","month_201611_base"]
+#
+# # delete_filename_list=[]
+# delete_filename_list=["month_201608","month_201609",
+#                       "month_201610","month_201608_base","month_201609_base",
+#                       "month_201610_base"]
 
 #90天非对称版：使用,用分位数法分组\汇总驾驶天数
-# if len(delete_filename_list)>0:
-#    pitch_delete(delete_file_list=delete_filename_list)
-# create_csv2table(imput_file_style=imput_file_90_style,if_clear=True,if_input=[1,0,0])#medie为中间
-# add_date(date_list_style=date_list_90_style)#medie为中间文件
-# when_case_risk_range(when_case_style=when_case_style_90day)#medie为中间文件
-# pei_vin2car(if_drop_carid=True,if_drop_dis=True,if_drop_happen=True,pei2car_style=pei2car_90_style,if_deal_pei=False)
-#save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='85.0',seg_range='90Days',mismatching=False)
-#divide_driveday(one_hot_style=one_hot_style_90days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
-#test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="90Days",file_road="/home/mapd/dumps/att_range/all/att",rang_num=15)
-# dict_ex=test_onehot_dv(one_hot_style_test=one_hot_style_90days_test,days_mark="90Days",file_road="/home/mapd/dumps/output/att_name.txt",cut_num=6,cut_vector=[])#按分位数法对指标进行切割并输出结果到/home/mapd/dumps/att_range/赔付最大化/att_range.txt
-# one_hot_style_90days_quantile["att_range"]=dict_ex
-# value2one_hot(one_hot_style=one_hot_style_90days_quantile,day_mark='90Days',pei_or_time="pei",group_avg=True)
+def Day_90_basedata_run(all_risk='90.0',limit_risk='88.0',seg_range='90Days'):
+    delete_filename_list=["month_201606","month_201607","month_201608","month_201609",
+                          "month_201610","month_201611","month_201606_base","month_201607_base",
+                          "month_201608_base","month_201609_base","month_201610_base",
+                          "month_201611_base"]
+    one_hot_style_90days_quantile={"database":"GLM_base_date_90Days",#数据库
+                                   "att_pei":"claims_use,time_use",
+                                   "att_car":"mileage,duration,maxspeed,a,d,isf,ish,isn",                      #指标
+                                   "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
+                                                "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
+                                                "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
+                                                "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
+                                                "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
+                                                "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
+                                                "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
+                                                "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
+                                                },
+                                   "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
+                                   "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
+                                   }
+    if len(delete_filename_list)>0:
+       pitch_delete(delete_file_list=delete_filename_list)
+    create_csv2table(imput_file_style=imput_file_90_style,if_clear=True,if_input=[1,0,0])#medie为中间
+    add_date(date_list_style=date_list_90_style)#medie为中间文件
+    when_case_risk_range(when_case_style=when_case_style_90day)#medie为中间文件
+    pei_vin2car(if_drop_carid=True,if_drop_dis=True,if_drop_happen=True,pei2car_style=pei2car_90_style,if_deal_pei=False)
+    save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='85.0',seg_range='90Days',mismatching=False)
+    divide_driveday(one_hot_style=one_hot_style_90days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
+
+def Day_90_att_random():
+    one_hot_style_30days_test={"database":"GLM_base_date_90Days",
+                               "sort_by":"mileage,duration,maxspeed,a,d,isf,ish,isn",
+                               "select_colums":"sum(ispei) as ispei,count(*) as record,avg(claims_use) as claims",
+                               # "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
+                               #              "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
+                               #              "maxspeed":[(0.0,24.0),(24.0,48.0),(48.0,72.0),(72.0,96.0),(96.0,120.0)],
+                               #              "a":[(0.0,10.0),(10.0,20.0),(20.0,30.0),(30.0,40.0),(40.0,1000000.0)],
+                               #              "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
+                               #              "isf":[(0.0,2.5),(2.5,100000)],
+                               #              "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
+                               #              "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
+                               #              }
+                               }
+    test_onehot_dv_file(one_hot_style_test=one_hot_style_90days_test,days_mark="90Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=15)
+
+
+def Day_90_fun():
+    #divide_driveday(one_hot_style=one_hot_style_90days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
+    one_hot_style_90days_quantile={"database":"GLM_base_date_90Days",#数据库
+                                   "att_pei":"claims_use,time_use",
+                                   "att_car":"mileage,maxspeed,a,d,isf,ish,isn",                      #指标
+                                   "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
+                                                "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
+                                                "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
+                                                "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
+                                                "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
+                                                "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
+                                                "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
+                                                "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
+                                                },
+                                   "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
+                                   "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
+                                   }
+    #随机选择一组可以赋值给one_hot_style_30days_quantile[ "att_range"]的区间
+    def choice_att_range(one_hot_style=one_hot_style_90days_quantile,att_file="/home/mapd/dumps/att_range/30Days_att.txt"):
+        keys=one_hot_style_30days_quantile["att_car"].split(",")
+        values=[""]*keys.__len__()
+        key_value_dict=dict(list(zip(keys,values)))
+
+        #逐行读入文件
+        f = open(att_file) # 返回一个文件对象
+        line="start"
+        while line:
+            line = f.readline()
+            if line.__eq__("end"):
+                break
+            temp_list=line.split("|")
+            key_n=str(temp_list[0].split(":")[1])
+            if keys.__contains__(key_n):
+                key_value_dict[key_n]=key_value_dict[key_n]+"|"+str(temp_list[1].split(":")[1])
+        f.close()
+
+        for e in key_value_dict:
+            temp_li=key_value_dict[e].split("|")
+            del temp_li[0]
+            value=random.sample(temp_li,1)
+            one_hot_style["att_range"][e]=list(map(lambda x:tuple(map(eval,(str(x).replace("(","").replace(")","").replace(" ","").split(",")))),str(value[0]).replace("]","").replace("[","").split("),")))
+        return one_hot_style["att_range"]
+    choice_att_range_value=choice_att_range(one_hot_style=one_hot_style_90days_quantile,att_file="/home/mapd/dumps/att_range/90Days_att.txt")
+    one_hot_style_90days_quantile["att_range"]=choice_att_range_value
+    value2one_hot(one_hot_style=one_hot_style_90days_quantile,group_avg=True,pei_or_time="pei",day_mark='90Days')
 
 
 #90天非对称版：使用,用分位数法分组
@@ -1110,6 +1231,7 @@ delete_filename_list=["month_201608","month_201609",
 # save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='88.0',seg_range='90Days',mismatching=False)
 # value2one_hot(one_hot_style=one_hot_style_90days_quantile,pei_or_time="pei",group_avg=True)
 
+
 #90天非对称版：使用，用赔付法分组
 # if len(delete_filename_list)>0:
 #    pitch_delete(delete_file_list=delete_filename_list)
@@ -1120,69 +1242,103 @@ delete_filename_list=["month_201608","month_201609",
 #save2use(GLM_need_att_style=GLM_need_att_90_style,all_risk='90.0',limit_risk='88.0',seg_range='90Days',mismatching=False)
 #value2one_hot(one_hot_style=one_hot_style_90days,group_avg=True)
 
-#30天对齐版：使用claim_t(对齐)或者claim_use(对齐)
-# if len(delete_filename_list)>0:
-#     pitch_delete(delete_file_list=delete_filename_list)
-# create_csv2table(imput_file_style=imput_file_style,if_clear=True,if_input=[1,0,0])#medie为中间
-# add_date(date_list_style=date_list_style)#medie为中间文件
-# when_case_risk_range(when_case_style=when_case_style_30day)#medie为中间文件
-# pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_style,if_deal_pei=False)
-# save2use(GLM_need_att_style=GLM_need_att_style,all_risk='30.0',limit_risk='28.0',seg_range='30Days',mismatching=True)
 
-one_hot_style_30days_quantile={"database":"GLM_base_date_30Days",#数据库
-                               "att_pei":"claims_use,time_use",
-                               "att_car":"mileage,duration,maxspeed,a,d,isf,ish,isn",                      #指标
-                               "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
-                                            "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
-                                            "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
-                                            "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
-                                            "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
-                                            "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
-                                            "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
-                                            "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
-                                            },
-                               "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
-                               "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
+#30天模型相关函数--------------------------------------------------------------------------------
+#生成基础数据
+def Day_30_basedata_run(all_risk='30.0',limit_risk='28.0',seg_range='30Days'):
+    delete_filename_list=["month_201608","month_201609",
+                          "month_201610","month_201608_base","month_201609_base",
+                          "month_201610_base"]
+    one_hot_style_30days_quantile={"database":"GLM_base_date_30Days",#数据库
+                                   "att_pei":"claims_use,time_use",
+                                   "att_car":"mileage,maxspeed,a,d,isf,ish,isn",                      #指标
+                                   "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
+                                                "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
+                                                "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
+                                                "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
+                                                "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
+                                                "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
+                                                "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
+                                                "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
+                                                },
+                                   "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
+                                   "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
+                                   }
+    #30天对齐版：使用claim_t(对齐)或者claim_use(对齐)
+    if len(delete_filename_list)>0:
+        pitch_delete(delete_file_list=delete_filename_list)
+    create_csv2table(imput_file_style=imput_file_style,if_clear=True,if_input=[1,0,0])#medie为中间
+    add_date(date_list_style=date_list_style)#medie为中间文件
+    when_case_risk_range(when_case_style=when_case_style_30day)#medie为中间文件
+    pei_vin2car(if_drop_carid=False,if_drop_dis=False,if_drop_happen=False,pei2car_style=pei2car_style,if_deal_pei=False)
+    save2use(GLM_need_att_style=GLM_need_att_style,all_risk=all_risk,limit_risk=limit_risk,seg_range=seg_range,mismatching=True)
+    divide_driveday(one_hot_style=one_hot_style_30days_quantile,days_mak="30Days")
+
+#生成模型参数随机数据集
+def Day_30_att_random():
+    one_hot_style_30days_test={"database":"GLM_base_date_30Days",
+                               "sort_by":"mileage,duration,maxspeed,a,d,isf,ish,isn",
+                               "select_colums":"sum(ispei) as ispei,count(*) as record,avg(claims_use) as claims",
+                               # "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
+                               #              "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
+                               #              "maxspeed":[(0.0,24.0),(24.0,48.0),(48.0,72.0),(72.0,96.0),(96.0,120.0)],
+                               #              "a":[(0.0,10.0),(10.0,20.0),(20.0,30.0),(30.0,40.0),(40.0,1000000.0)],
+                               #              "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
+                               #              "isf":[(0.0,2.5),(2.5,100000)],
+                               #              "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
+                               #              "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
+                               #              }
                                }
+    test_onehot_dv_file(one_hot_style_test=one_hot_style_30days_test,days_mark="30Days",file_road_every="/home/mapd/dumps/att_range/",rang_num=15)
 
-#divide_driveday(one_hot_style=one_hot_style_30days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
-one_hot_style_30days_quantile={"database":"GLM_base_date_30Days",#数据库
-                               "att_pei":"claims_use,time_use",
-                               "att_car":"mileage,maxspeed,a,d,isf,ish,isn",                      #指标
-                               "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
-                                            "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
-                                            "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
-                                            "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
-                                            "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
-                                            "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
-                                            "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
-                                            "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
-                                            },
-                               "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
-                               "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
-                               }
 
-one_hot_style_30days_test={"database":"GLM_base_date_30Days",
-                           "sort_by":"mileage,duration,maxspeed,a,d,isf,ish,isn",
-                           "select_colums":"sum(ispei) as ispei,count(*) as record,avg(claims_use) as claims",
-                           # "att_range":{"mileage":[(0.0,2000.0),(2000.0,4000.0),(4000.0,6000.0),(6000.0,8000.0),(8000.0,10000.0),(10000.0,1000000.0)],
-                           #              "duration":[(0.0,400000.0),(400000.0,800000.0),(800000.0,1200000.0),(1200000.0,50000000.0)],
-                           #              "maxspeed":[(0.0,24.0),(24.0,48.0),(48.0,72.0),(72.0,96.0),(96.0,120.0)],
-                           #              "a":[(0.0,10.0),(10.0,20.0),(20.0,30.0),(30.0,40.0),(40.0,1000000.0)],
-                           #              "d":[(0.0,100.0),(100.0,200.0),(200.0,300.0),(300.0,400.0),(400.0,1000000.0)],
-                           #              "isf":[(0.0,2.5),(2.5,100000)],
-                           #              "ish":[(0.0,9.0),(9.0,18.0),(18.0,27.0),(27.0,36.0),(36.0,45.0)],
-                           #              "isn":[(0.0,0.05),(0.05,10000)]#只判断有无夜间驾驶
-                           #              }
-                           }
-#把所有可能的属性都跑一次，查看最佳属性值
-#test_onehot_dv_file(one_hot_style_test=one_hot_style_30days_test,days_mark="30Days",file_road="/home/mapd/dumps/att_range/all/att")
-# dict_ex=test_onehot_dv(one_hot_style_test=one_hot_style_30days_test,days_mark="30Days",file_road="/home/mapd/dumps/output/att_name.txt",cut_num=6,cut_vector=[])#按分位数法对指标进行切割并输出结果到/home/mapd/dumps/att_range/赔付最大化/att_range.txt
-# one_hot_style_30days_quantile["att_range"]=dict_ex
-# one_hot_style_30days_quantile["att_range"]["a"]=[(0.0, 1.0), (1.0, 6.0), (6.0, 2303.0)]
-# one_hot_style_30days_quantile["att_range"]["isf"]=[(0.0, 0.0),(0.0, 30.0)]
-# one_hot_style_30days_quantile["att_range"]["ish"]=[(0.0, 1.0), (1.0, 5.0), (5.0, 30.0)]
-# value2one_hot(one_hot_style=one_hot_style_30days_quantile,group_avg=True,day_mark='30Days')
+def Day_30_fun():
+    #divide_driveday(one_hot_style=one_hot_style_30days_quantile)#是否需要用高速天数、疲劳驾驶天数、夜间天数/
+    one_hot_style_30days_quantile={"database":"GLM_base_date_30Days",#数据库
+                                   "att_pei":"claims_use,time_use",
+                                   "att_car":"mileage,maxspeed,a,d,isf,ish,isn",                      #指标
+                                   "att_range":{"mileage":[(0.0, 1960.801513671875), (1960.801513671875, 2948.99306640625), (2948.99306640625, 4052.02978515625), (4052.02978515625, 5779.193359375002), (5779.193359375002, 73654.703125)],
+                                                "duration":[(0.0, 268806.2), (268806.2, 383555.20000000007), (383555.20000000007, 505016.00000000006), (505016.00000000006, 684012.4), (684012.4, 6054905.0)],
+                                                "maxspeed":[(0.0, 39.877777099609375), (39.877777099609375, 53.36666564941406), (53.36666564941406, 63.63333435058594), (63.63333435058594, 74.36864624023438), (74.36864624023438, 225.5888875325521)],
+                                                "a":[(0.0, 0.2000000000007276), (0.2000000000007276, 3.0), (3.0, 9.0), (9.0, 27.0), (27.0, 4630.0)],
+                                                "d":[(0.0, 20.0), (20.0, 44.0), (44.0, 82.60000000000218), (82.60000000000218, 171.0), (171.0, 6577.0)],
+                                                "isf":[(0.0, 0.0), (0.0, 1.1235954761505127), (1.1235954761505127, 3.4482758045196533), (3.4482758045196533, 100.0)],
+                                                "ish":[(0.0, 2.702702760696411), (2.702702760696411, 7.462686538696289), (7.462686538696289, 13.88888931274414), (13.88888931274414, 25.555557250976562), (25.555557250976562, 100.0)],
+                                                "isn":[(0.0, 0.0), (0.0, 20.370370864868164)]#只判断有无夜间驾驶
+                                                },
+                                   "use_handn2day":True,#是否需要将疲劳驾驶天数\高速时间天数\夜间驾驶天数/驾驶天数
+                                   "use_handan2day_colums":"ispei,claims_use,time_use,claims_t,time_t,mileage,duration,maxspeed,a,d"  #在GLM_base_date_90Days中除开isn\ish以外的所有指标
+                                   }
+    #随机选择一组可以赋值给one_hot_style_30days_quantile[ "att_range"]的区间
+    def choice_att_range(one_hot_style=one_hot_style_30days_quantile,att_file="/home/mapd/dumps/att_range/30Days_att.txt"):
+        keys=one_hot_style_30days_quantile["att_car"].split(",")
+        values=[""]*keys.__len__()
+        key_value_dict=dict(list(zip(keys,values)))
+
+        #逐行读入文件
+        f = open(att_file) # 返回一个文件对象
+        line="start"
+        while line:
+            line = f.readline()
+            if line.__eq__("end"):
+               break
+            temp_list=line.split("|")
+            key_n=str(temp_list[0].split(":")[1])
+            if keys.__contains__(key_n):
+               key_value_dict[key_n]=key_value_dict[key_n]+"|"+str(temp_list[1].split(":")[1])
+        f.close()
+
+        for e in key_value_dict:
+            temp_li=key_value_dict[e].split("|")
+            del temp_li[0]
+            value=random.sample(temp_li,1)
+            one_hot_style["att_range"][e]=list(map(lambda x:tuple(map(eval,(str(x).replace("(","").replace(")","").replace(" ","").split(",")))),str(value[0]).replace("]","").replace("[","").split("),")))
+        return one_hot_style["att_range"]
+    choice_att_range_value=choice_att_range(one_hot_style=one_hot_style_30days_quantile,att_file="/home/mapd/dumps/att_range/30Days_att.txt")
+    one_hot_style_30days_quantile["att_range"]=choice_att_range_value
+    value2one_hot(one_hot_style=one_hot_style_30days_quantile,group_avg=True,day_mark='30Days')
+#30天模型结束--------------------------------------------------------------------------------------
+
 
 # #15天对齐版：使用claim_t(对齐)或者claim_use
 # if len(delete_filename_list)>0:

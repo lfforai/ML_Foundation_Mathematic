@@ -14,7 +14,7 @@ def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_
     #随机生成初始化的中心位置
     id_random=list(np.random.randint(0, high=row_size-1, size=row_size-1, dtype='l'))#生成分组初始值index
     id_random=random.sample(id_random,means_group_num)
-    print("random id:",id_random)
+    # print("random id:",id_random)
 
     #init_u=[]
     temp_list=[]
@@ -82,7 +82,10 @@ def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_
         group_u=tf.map_fn(map_func,abs_temp)#
         #point=[u,y,group_id]
         point=tf.concat([u_vs_y,tf.reshape(group_u,[-1,1])],axis=1)#已经为每个u分好类别了
-        with tf.Session() as sess:#计算出结果以后再进行筛选
+
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        with tf.Session(config=config) as sess:#计算出结果以后再进行筛选
             point_sess=sess.run(point)
             sess.close()
         return point_sess
@@ -92,25 +95,24 @@ def k_means_core(u=tf.constant(0),y=tf.constant(0),w=tf.constant(0),means_group_
     return point_sess
 
 #基于tensorflow的k_means,model_tpye="posssion" or "tweedie"
-def k_means(filename="",parameter=[],model_type="tweedie",day_mark="30Days",step_model=15,step_k_means=50):
+def k_means(model_type="tweedie",day_mark="30Days",step_model=15,step_k_means=50,inputfilename="",save_filename="/home/mapd/dumps/result/tweedie_30Days/result.txt"):
     #计算参数
     #读取有多少个参数
+    print("-----读取GLM模型基本参数如下：---------------------")
     info_n={"att_modle_risk":"","att_model_all":"","att_modle_nh":"","att_modle_base":"","pei":"","weight":"","att_num":"","day_mark":"","att_car":""}
     f = open("/home/mapd/dumps/output/att_name_"+day_mark+".txt")             # 返回一个文件对象
     line = f.readline()
-    print(line.split(":")[0])
     info_n[line.split(":")[0]]=line.split(":")[1].replace("\n","")
-    print(info_n[line.split(":")[0]])
+    print(line.split(":")[0]+":"+info_n[line.split(":")[0]])
     i=1
     while line and i<9:
         line = f.readline()
-        print(line.split(":")[0])
+        # print(line.split(":")[0])
         info_n[line.split(":")[0]]=line.split(":")[1].replace("\n","")
-        print(info_n[line.split(":")[0]])
+        print(line.split(":")[0]+":"+info_n[line.split(":")[0]])
         i=i+1
     f.close()
     colums_num=int(info_n["att_num"])
-    print("参数个数:=",colums_num)
 
     g=tf.Graph()
     #计算参数GLM模型参数
@@ -131,7 +133,7 @@ def k_means(filename="",parameter=[],model_type="tweedie",day_mark="30Days",step
     att_name_vs_value_nh=dict(zip(info_n["att_modle_nh"].replace("\n","").split(","),b_1))
     for e in att_name_vs_value_nh: #遍历所有拟合属性
         att_name_vs_value_all[e]=att_name_vs_value_nh[e]
-    print("GLM模型参数：",att_name_vs_value_all)
+    # print("GLM模型参数：",att_name_vs_value_all)
 
     y,w,x=GLM_iteration.readcsv(filename="/home/mapd/dumps/output/GLM_base_date_"+info_n["day_mark"]+"_one_hot.csv")
     row_size=y.shape[0]#总共有多少样本
@@ -161,7 +163,7 @@ def k_means(filename="",parameter=[],model_type="tweedie",day_mark="30Days",step
          result.insert(0,"等级",level)
          # 车辆数结果
 
-         #按标准格式输出系数
+         #按标准格式输出系数-------------------
          o_list=info_n["att_car"].split(",")#mileage,maxspeed,a,d,isf,ish,isn
          o_list=dict(list(zip(o_list,[""]*o_list.__len__())))
          # print("o_list:",o_list)
@@ -211,7 +213,10 @@ def k_means(filename="",parameter=[],model_type="tweedie",day_mark="30Days",step
          #打印结果
          text="一、GLM模型系数("+day_mark+")\n"+"指标说明：mileage-公里数,maxspeed-最大速度,a-急加速,d-急减速,isf-疲劳驾驶/驾驶天数占比,ish-高速行驶/驾驶天数占比,isn-夜间驾驶/驾驶天数占比\n\n"
          #因子名称
-
+         if model_type=="tweedie":
+            text=text+"基准赔款：="+str(b_1[0])+"\n"
+         else:
+            text=text+"基准出险频率：="+str(b_1[0])+"\n"
          for e in o_list:
              text=text+" "*int((stand_len-e.__len__())/2)+e+" "*int((stand_len-int((stand_len-e.__len__())/2)-e.__len__()))+"|"
 
@@ -224,8 +229,9 @@ def k_means(filename="",parameter=[],model_type="tweedie",day_mark="30Days",step
              text=text+temp_text+"\n"
          text=text+"二、各风险等级车辆\n"+str(result)
          print(text)
+         data_pre_deal.write2txt(save_filename,text)
     return 0
-k_means(filename="",parameter=[],model_type="tweedie",day_mark="30Days",step_model=5,step_k_means=5)
-#print(k_means())
 
+def main():
+    k_means(model_type="tweedie",day_mark="30Days",step_model=5,step_k_means=5,inputfilename="",save_filename="/home/mapd/dumps/result/tweedie_30Days/result_0.txt")
 

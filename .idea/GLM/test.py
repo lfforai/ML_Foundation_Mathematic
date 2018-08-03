@@ -70,3 +70,24 @@ new_len=new.__len__()
 print(" "*int(((new_len-d.__len__())/2))+d+" "*(new_len-d.__len__()-int((new_len-d.__len__())/2)))
 print(new)
 print(round(b,6))
+
+
+def write2txt(txtName = "codingWord.txt",des_txt="",att='w'):
+    import os
+    if att=='a':
+        if os.path.exists(txtName):
+            pass
+        else:
+            with open(txtName,'w') as f:
+                f.write(des_txt)
+                f.close()
+                return 0
+
+    with open(txtName,att) as f:
+        f.write(des_txt)
+        f.close()
+    return 0
+
+write2txt(txtName = "/home/mapd/dumps/att_range/codingWord.txt",des_txt="a",att='a')
+list_a=[[(1.0,1.0),(1.0,2.0)],[]]
+print(list(map(lambda x:tuple(map(eval,(str(x).replace("(","").replace(")","").replace(" ","").split(",")))),"[(0.0, 1.0), (1.0, 4.0), (4.0, 11.0), (11.0, 2373.0)]".replace("]","").replace("[","").split("),"))))
